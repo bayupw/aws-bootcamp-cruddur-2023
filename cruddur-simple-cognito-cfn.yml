@@ -24,10 +24,10 @@ Resources:
     Properties:
 
       # Step 1 - Sign-in Experience
+      UsernameAttributes:
+        - email
       UsernameConfiguration: 
         CaseSensitive: false
-      AliasAttributes: 
-        - "email"      
       AutoVerifiedAttributes:
         - email
       

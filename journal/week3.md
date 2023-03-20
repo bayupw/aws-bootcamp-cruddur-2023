@@ -28,7 +28,7 @@ Amplify.configure({
 });
 ```
 
-## Conditionally show components based on logged in or logged out
+## Update Home Feed Page
 
 Add the following code into the `HomeFeedPage.js` under `frontend-react-js/src/pages`
 
@@ -88,19 +88,18 @@ import { Auth } from 'aws-amplify';
 const onsubmit = async (event) => {
   setErrors('')
   event.preventDefault();
-  try {
-    Auth.signIn(username, password)
-      .then(user => {
-        localStorage.setItem("access_token", user.signInUserSession.accessToken.jwtToken)
-        window.location.href = "/"
-      })
-      .catch(err => { console.log('Error!', err) });
-  } catch (error) {
+  Auth.signIn(email, password)
+  .then(user => {
+    console.log('user',user)
+    localStorage.setItem("access_token", user.signInUserSession.accessToken.jwtToken)
+    window.location.href = "/"
+  })
+  .catch(error => { 
     if (error.code == 'UserNotConfirmedException') {
       window.location.href = "/confirm"
     }
-    setCognitoErrors(error.message)
-  }
+    setErrors(error.message)
+  });
   return false
 }
 ```
@@ -114,7 +113,95 @@ Add the following Env Var to `frontend-react-js:` under section `environment:` i
       REACT_APP_CLIENT_ID: "${REACT_APP_CLIENT_ID}"
 ```
 
-## Install AWS Amplify, add 
+## Update Signup Page
+
+Add the following code into the `SignupPage.js` under `frontend-react-js/src/pages`
+
+```js
+// comment out or delete `import Cookies from 'js-cookie'` 
+// import Cookies from 'js-cookie'
+import { Auth } from 'aws-amplify';
+
+// replace line 17-30 `const onsubmit` with the following code
+const onsubmit = async (event) => {
+  event.preventDefault();
+  setErrors('')
+  try {
+      const { user } = await Auth.signUp({
+        username: email,
+        password: password,
+        attributes: {
+            name: name,
+            email: email,
+            preferred_username: username,
+        },
+        autoSignIn: { // optional - enables auto sign in after user is confirmed
+            enabled: true,
+        }
+      });
+      console.log(user);
+      window.location.href = `/confirm?email=${email}`
+  } catch (error) {
+      console.log(error);
+      setErrors(error.message)
+  }
+  return false
+}
+
+let errors;
+if (cognitoErrors){
+  errors = <div className='errors'>{cognitoErrors}</div>;
+}
+
+//before submit component
+{errors}
+```
+
+## Update Confirmation Page
+
+Add the following code into the `SignupPage.js` under `frontend-react-js/src/pages`
+
+```js
+// comment out or delete `import Cookies from 'js-cookie'` 
+// import Cookies from 'js-cookie'
+import { Auth } from 'aws-amplify';
+
+// replace `const resend_code` with the following code
+const resend_code = async (event) => {
+  setErrors('')
+  try {
+    await Auth.resendSignUp(email);
+    console.log('code resent successfully');
+    setCodeSent(true)
+  } catch (err) {
+    // does not return a code
+    // does cognito always return english
+    // for this to be an okay match?
+    console.log(err)
+    if (err.message == 'Username cannot be empty'){
+      setErrors("You need to provide an email in order to send Resend Activiation Code")   
+    } else if (err.message == "Username/client id combination not found."){
+      setErrors("Email is invalid or cannot be found.")   
+    }
+  }
+}
+
+// replace `const onsubmit` with the following code
+  const onsubmit = async (event) => {
+    event.preventDefault();
+    setErrors('')
+    try {
+      await Auth.confirmSignUp(email, code);
+      window.location.href = "/"
+    } catch (error) {
+      setErrors(error.message)
+    }
+    return false
+  }
+
+```
+
+## Test the updated code 
 
 Cognito User Pool ID and Client ID can also be retrieved from the CloudFormation stack output
 ![Cognito CloudFormation Stack Output](../_docs/assets/cruddur-cognito-stack-screenshot.png)

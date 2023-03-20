@@ -15,18 +15,18 @@ export default function SigninPage() {
   const onsubmit = async (event) => {
     setErrors('')
     event.preventDefault();
-    try {
-      Auth.signIn(username, password)
-      .then(user => {
-        localStorage.setItem("access_token", user.signInUserSession.accessToken.jwtToken)
-        window.location.href = "/"
-      })
-      .catch(err => {
-        if (error.code == 'UserNotConfirmedException') {
-          window.location.href = "/confirm"
-        }
-        setCognitoErrors(error.message)  
-      });
+    Auth.signIn(email, password)
+    .then(user => {
+      console.log('user',user)
+      localStorage.setItem("access_token", user.signInUserSession.accessToken.jwtToken)
+      window.location.href = "/"
+    })
+    .catch(error => { 
+      if (error.code == 'UserNotConfirmedException') {
+        window.location.href = "/confirm"
+      }
+      setErrors(error.message)
+    });
     return false
   }
 
