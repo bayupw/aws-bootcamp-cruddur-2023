@@ -134,7 +134,7 @@ Resources:
 Outputs:
   UserPoolID:
     Value: !Ref CognitoUserPool
-    Description: UserPoolID
+    Description: REACT_APP_AWS_USER_POOLS_ID
   UserPoolClientID:
     Value: !Ref CognitoUserPoolClient
-    Description: UserPoolClientID
+    Description: REACT_APP_CLIENT_ID
