@@ -35,8 +35,28 @@ Add the following code into the `HomeFeedPage.js` under `frontend-react-js/src/p
 ```js
 import { Auth } from 'aws-amplify';
 
+// replace const `loadData` with the following code
+  const loadData = async () => {
+    try {
+      const backend_url = `${process.env.REACT_APP_BACKEND_URL}/api/activities/home`
+      const res = await fetch(backend_url, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`
+        },
+        method: "GET"
+      });
+      let resJson = await res.json();
+      if (res.status === 200) {
+        setActivities(resJson)
+      } else {
+        console.log(res)
+      }
+    } catch (err) {
+      console.log(err);
+    }
+  };
 
-// replace line 40-49 `const checkAuth` with the following code to check whether user is authenticated or not
+// replace `const checkAuth` with the following code to check whether user is authenticated or not
 const checkAuth = async () => {
   Auth.currentAuthenticatedUser({
     // Optional, By default is false. 
@@ -431,15 +451,12 @@ Add with the following code at the bottom
 Cognito User Pool ID and Client ID can also be retrieved from the CloudFormation stack output
 ![Cognito CloudFormation Stack Output](../_docs/assets/cruddur-cognito-stack-screenshot.png)
 
-Install dependencies from the ```backend-flask``` directory
+Install dependencies from the ```backend-flask``` directory, install npm, aws-amplify, set env vars and run docker compose up
 
 ```sh
 cd backend-flask
 pip install -r requirements.txt
 cd ..
-```
-
-```sh
 cd frontend-react-js
 npm install aws-amplify --save
 npm install
