@@ -2,6 +2,9 @@
 
 ## Provision Cognito User Group
 
+Create AWS Cognito User Pool from AWS Console or using the following CloudFormation template: 
+https://raw.githubusercontent.com/bayupw/aws-bootcamp-cruddur-2023/main/cruddur-simple-cognito-cfn.yml
+
 Using the AWS Console we'll create a Cognito User Group
 
 ## Configure AWS Amplify
@@ -111,8 +114,10 @@ Add the following Env Var to `frontend-react-js:` under section `environment:` i
       REACT_APP_CLIENT_ID: "${REACT_APP_CLIENT_ID}"
 ```
 
+## Install AWS Amplify, add 
 
-## Install AWS Amplify library
+Cognito User Pool ID and Client ID can also be retrieved from the CloudFormation stack output
+![Cognito CloudFormation Stack Output](../_docs/assets/cruddur-cognito-stack-screenshot.png)
 
 ```sh
 cd frontend-react-js
