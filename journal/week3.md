@@ -198,8 +198,38 @@ const resend_code = async (event) => {
     }
     return false
   }
-
 ```
+
+## Update Recovery Page
+
+Add the following code into the `RecoverPage.js` under `frontend-react-js/src/pages`
+
+```js
+// comment out or delete `import Cookies from 'js-cookie'` 
+// import Cookies from 'js-cookie'
+import { Auth } from 'aws-amplify';
+
+const onsubmit_send_code = async (event) => {
+  event.preventDefault();
+  setErrors('')
+  Auth.forgotPassword(username)
+  .then((data) => setFormState('confirm_code') )
+  .catch((err) => setErrors(err.message) );
+  return false
+}
+
+const onsubmit_confirm_code = async (event) => {
+  event.preventDefault();
+  setErrors('')
+  if (password == passwordAgain){
+    Auth.forgotPasswordSubmit(username, code, password)
+    .then((data) => setFormState('success'))
+    .catch((err) => setErrors(err.message) );
+  } else {
+    setErrors('Passwords do not match')
+  }
+  return false
+}
 
 ## Test the updated code 
 
@@ -214,14 +244,15 @@ npm install
 export AWS_ACCESS_KEY_ID="keyid"
 export AWS_SECRET_ACCESS_KEY="secretkey"
 export AWS_DEFAULT_REGION="ap-southeast-2"
-export REACT_APP_AWS_USER_POOLS_ID="AWS Cognito User Pool ID"
+export REACT_APP_AWS_USER_POOLS_ID="UserPoolClientID"
 export REACT_APP_CLIENT_ID="AWS Cognito Client ID"
 
 gp env AWS_ACCESS_KEY_ID="keyid"
 gp env AWS_SECRET_ACCESS_KEY="secretkey"
 gp env AWS_DEFAULT_REGION="ap-southeast-2"
-gp env REACT_APP_AWS_USER_POOLS_ID="AWS Cognito User Pool ID"
-gp env REACT_APP_CLIENT_ID="AWS Cognito Client ID"
+gp env REACT_APP_AWS_USER_POOLS_ID="UserPoolClientID"
+gp env REACT_APP_CLIENT_ID="UserPoolID"
 
+cd ..
 docker compose -f "docker-compose.yml" up -d --build
 ```
