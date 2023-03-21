@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: RDS Postgres CFN
+
+Parameters:
+  DBInstanceId:
+    Type: String
+    MinLength: '1'
+    MaxLength: '63'
+    Description: Database Instance ID
+    Default: cruddur-db-instance
+  DBName:
+    Type: String
+    MinLength: '1'
+    MaxLength: '63'
+    Description: Database Instance Name
+    Default: cruddur
+  DBMasterUsername:
+    NoEcho: 'true'
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    Default: root
+    Description: Database Master Username
+  DBMasterPassword:
+    NoEcho: 'true'
+    Type: String
+    MinLength: '8'
+    MaxLength: '41'
+    Description: Database Master Password
+  DBInstanceClass:
+    Type: String
+    AllowedValues: [db.t3.micro,db.t4g.micro]
+    Default: db.t3.micro
+  DBStorageSize:
+    Type: String
+    Default: 20
+  DBStorageType:
+    Type: String
+    Default: gp2
+  DBEngineVersion:
+    Type: String
+    AllowedValues: [14.5,14.6,14.7,15.2]
+    Default: 14.6
+  DBPort:
+    Type: String
+    Default: 5432
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Select an existing VPC
+  SubnetId:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Select existing subnet(s) for RDS
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Select an existing security group ID
+  AvailabilityZone:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Description: Select an existing Availability Zone
+  EnableStorageEncryption:
+    Type: String
+    Description: Enable storage encryption
+    AllowedValues:
+      - true
+      - false
+    Default: false
+  EnableMultiAZ:
+    Type: String
+    Description: Create a multi-AZ Amazon RDS database instance
+    AllowedValues:
+      - true
+      - false
+    Default: false
+  EnablePublicAccess:
+    Type: String
+    Description: Enable public access
+    AllowedValues:
+      - true
+      - false
+    Default: true
+
+Resources:
+  RDSInstance:
+    Type: AWS::RDS::DBInstance # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-rds-dbinstance.html
+    Properties:
+      DBInstanceIdentifier: !Ref DBInstanceId
+      DBName: !Ref DBName
+      DBInstanceClass: "db.t3.micro"
+      Engine: "postgres"
+      EngineVersion: !Ref DBEngineVersion
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Ref DBMasterPassword
+      Port: !Ref DBPort
+      StorageType: !Ref DBStorageType
+      AllocatedStorage: !Ref DBStorageSize
+      StorageEncrypted: !Ref EnableStorageEncryption
+      BackupRetentionPeriod: 0
+      MultiAZ: !Ref EnableMultiAZ
+      AvailabilityZone: !Ref AvailabilityZone
+      PubliclyAccessible: !Ref EnablePublicAccess
+      VPCSecurityGroups:
+        - !Ref SecurityGroupId
+
+Outputs:
+  DatabaseInstanceId:
+    Value: !Ref RDSInstance
+    Description: Database InstanceId
+  DatabaseName:
+    Value: !Ref DBName
+    Description: Database Name
+  DatabaseMasterUsername:
+    Value: !Ref DBMasterUsername
+    Description: Database master username
+  DatabaseMasterPassword:
+    Value: !Ref DBMasterPassword
+    Description: Database master password
+  DatabaseEndpoint:
+    Description: Database connection endpoint
+    Value: !GetAtt RDSInstance.Endpoint.Address
+  DatabasePort:
+    Description: Database port
+    Value: !Ref DBPort

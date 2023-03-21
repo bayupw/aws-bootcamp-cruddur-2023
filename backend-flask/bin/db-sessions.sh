@@ -11,7 +11,9 @@ else
   URL=$CONNECTION_URL
 fi
 
+# remove cruddur from connection URI
 NO_DB_URL=$(sed 's/\/cruddur//g' <<<"$URL")
+
 psql $NO_DB_URL -c "select pid as process_id, \
        usename as user,  \
        datname as db, \
