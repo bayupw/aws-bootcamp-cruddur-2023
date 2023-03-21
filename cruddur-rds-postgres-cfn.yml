@@ -2,6 +2,35 @@ AWSTemplateFormatVersion: "2010-09-09"
 
 Description: RDS Postgres CFN
 
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups:
+      - Label:
+          default: "RDS Parameters"
+        Parameters:
+          - DBInstanceId
+          - DBName
+          - DBMasterUsername
+          - DBMasterPassword
+          - DBInstanceClass
+          - DBStorageSize
+          - DBStorageType
+          - DBEngineVersion
+          - DBPort
+          - VpcId
+          - SubnetId
+          - AvailabilityZone
+          - EnableStorageEncryption
+          - EnableMultiAZ
+          - EnablePublicAccess
+      - Label:
+          default: "Security Group Parameters"
+        Parameters:
+          - SGProtocol
+          - SGFromPort
+          - SGToPort
+          - SGCidrIp
+
 Parameters:
   DBInstanceId:
     Type: String
@@ -50,42 +79,56 @@ Parameters:
   SubnetId:
     Type: List<AWS::EC2::Subnet::Id>
     Description: Select existing subnet(s) for RDS
-  SecurityGroupId:
-    Type: AWS::EC2::SecurityGroup::Id
-    Description: Select an existing security group ID
   AvailabilityZone:
     Type: AWS::EC2::AvailabilityZone::Name
     Description: Select an existing Availability Zone
   EnableStorageEncryption:
     Type: String
     Description: Enable storage encryption
-    AllowedValues:
-      - true
-      - false
+    AllowedValues: [true,false]
     Default: false
   EnableMultiAZ:
     Type: String
     Description: Create a multi-AZ Amazon RDS database instance
-    AllowedValues:
-      - true
-      - false
+    AllowedValues: [true,false]
     Default: false
   EnablePublicAccess:
     Type: String
     Description: Enable public access
-    AllowedValues:
-      - true
-      - false
+    AllowedValues: [true,false]
     Default: true
 
+  SGProtocol:
+    Type: String
+    Default: tcp
+  SGFromPort:
+    Type: Number
+    Default: 5432
+  SGToPort:
+    Type: Number
+    Default: 5432
+  SGCidrIp:
+    Type: String
+    Default: 1.1.1.1/32
+
 Resources:
+  DBEC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow incoming traffic to PostgreSQL
+      SecurityGroupIngress:
+        - IpProtocol: !Ref SGProtocol
+          FromPort: !Ref SGFromPort
+          ToPort: !Ref SGToPort
+          CidrIp: !Ref SGCidrIp
+
   RDSInstance:
     Type: AWS::RDS::DBInstance # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-rds-dbinstance.html
     Properties:
       DBInstanceIdentifier: !Ref DBInstanceId
       DBName: !Ref DBName
-      DBInstanceClass: "db.t3.micro"
-      Engine: "postgres"
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: postgres
       EngineVersion: !Ref DBEngineVersion
       MasterUsername: !Ref DBMasterUsername
       MasterUserPassword: !Ref DBMasterPassword
@@ -97,10 +140,12 @@ Resources:
       MultiAZ: !Ref EnableMultiAZ
       AvailabilityZone: !Ref AvailabilityZone
       PubliclyAccessible: !Ref EnablePublicAccess
-      VPCSecurityGroups:
-        - !Ref SecurityGroupId
+      VPCSecurityGroups: [!GetAtt DBEC2SecurityGroup.GroupId]
 
 Outputs:
+  DatabaseSecurityGroupId:
+    Value: !Ref DBEC2SecurityGroup
+    Description: Security Group Id
   DatabaseInstanceId:
     Value: !Ref RDSInstance
     Description: Database InstanceId
@@ -119,3 +164,6 @@ Outputs:
   DatabasePort:
     Description: Database port
     Value: !Ref DBPort
+  DatabaseConnectionURI:
+    Description: Database connection URI
+    Value: !Join [ "", ["postgresql://", !Ref DBMasterUsername, ":", !Ref DBMasterPassword, "@", !GetAtt RDSInstance.Endpoint.Address, ":", !Ref DBPort, "/", !Ref DBName]]
