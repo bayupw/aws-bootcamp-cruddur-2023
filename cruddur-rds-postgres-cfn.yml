@@ -20,7 +20,6 @@ Parameters:
     Type: String
     MinLength: '1'
     MaxLength: '16'
-    Default: root
     Description: Database Master Username
   DBMasterPassword:
     NoEcho: 'true'

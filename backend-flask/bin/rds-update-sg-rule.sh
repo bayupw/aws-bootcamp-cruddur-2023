@@ -2,7 +2,7 @@
 
 CYAN='\033[1;36m'
 NO_COLOR='\033[0m'
-LABEL="rds-update-sg-rule"
+LABEL="Running rds-update-sg-rule.sh script ..."
 printf "${CYAN}==== ${LABEL}${NO_COLOR}\n"
 
 aws ec2 modify-security-group-rules \

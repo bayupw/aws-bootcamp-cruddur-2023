@@ -71,3 +71,5 @@ aws rds create-db-instance \
   --performance-insights-retention-period 7 \
   --no-deletion-protection
 ```
+
+`GITPOD_IP=$(curl ifconfig.me)`
