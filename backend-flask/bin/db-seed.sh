@@ -2,10 +2,10 @@
 
 CYAN='\033[1;36m'
 NO_COLOR='\033[0m'
-LABEL="db-seed"
+LABEL="Running db-seed.sh script ..."
 printf "${CYAN}== ${LABEL}${NO_COLOR}\n"
 
-seed_path="$(realpath .)/db/seed.sql"
+seed_path="../db/seed.sql"
 echo $seed_path
 
 if [ "$1" = "prod" ]; then

@@ -2,7 +2,7 @@
 
 CYAN='\033[1;36m'
 NO_COLOR='\033[0m'
-LABEL="db-create"
+LABEL="Running db-create.sh script ..."
 printf "${CYAN}== ${LABEL}${NO_COLOR}\n"
 
 # remove cruddur from connection URI

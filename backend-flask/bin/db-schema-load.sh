@@ -2,10 +2,10 @@
 
 CYAN='\033[1;36m'
 NO_COLOR='\033[0m'
-LABEL="db-schema-load"
+LABEL="Running db-schema-load.sh script ..."
 printf "${CYAN}== ${LABEL}${NO_COLOR}\n"
 
-schema_path="$(realpath .)/db/schema.sql"
+schema_path="../db/schema.sql"
 echo $schema_path
 
 if [ "$1" = "prod" ]; then
