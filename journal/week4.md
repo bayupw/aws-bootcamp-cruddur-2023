@@ -7,6 +7,7 @@ Set environment variables and run docker compose up
 ```sh
 cd backend-flask
 pip install -r requirements.txt
+
 cd ..
 cd frontend-react-js
 npm install aws-amplify --save
@@ -169,6 +170,104 @@ while true; do
         *) echo "Invalid choice. Please try again.";;
     esac
 done
+```
+Run scripts from `/backend-flask/bin` directory
+
+### Install postgres Client
+
+Install postgres client https://www.psycopg.org/psycopg3/ locally to test database connectivity and query on the containers
+
+Add the env var `CONNECTION_URL` to the backend-flask application:
+
+```yml
+  backend-flask:
+    environment:
+      CONNECTION_URL: "${CONNECTION_URL}"
+```
+
+Add psycopg to backend-flask `requirements.txt`
+
+```
+psycopg[binary]
+psycopg[pool]
+```
+
+Install psycopg 
+```
+pip install -r requirements.txt
+```
+
+### Code DB connection pooling
+
+Create new file `db.py` under `backend-flask/lib`
+
+db.py
+```py
+from psycopg_pool import ConnectionPool
+import os
+
+def query_wrap_object(template):
+  sql = f"""
+  (SELECT COALESCE(row_to_json(object_row),'{{}}'::json) FROM (
+  {template}
+  ) object_row);
+  """
+  return sql
+
+def query_wrap_array(template):
+  sql = f"""
+  (SELECT COALESCE(array_to_json(array_agg(row_to_json(array_row))),'[]'::json) FROM (
+  {template}
+  ) array_row);
+  """
+  return sql
+
+connection_url = os.getenv("CONNECTION_URL")
+pool = ConnectionPool(connection_url)
+```
+
+Import `db.py` into `home_activities.py` and update the code to use the connection pool
+
+```py
+from datetime import datetime, timedelta, timezone
+from opentelemetry import trace
+from lib.db import pool, query_wrap_object, query_wrap_array
+
+tracer = trace.get_tracer("home.activities")
+
+class HomeActivities:
+  def run(cognito_user_id=None):
+    print("HOME ACTIVITY")
+    #logger.info("HomeActivities")
+    with tracer.start_as_current_span("home-activites-mock-data"):
+      span = trace.get_current_span()
+      now = datetime.now(timezone.utc).astimezone()
+      span.set_attribute("app.now", now.isoformat())
+
+      sql = query_wrap_array("""
+      SELECT
+        activities.uuid,
+        users.display_name,
+        users.handle,
+        activities.message,
+        activities.replies_count,
+        activities.reposts_count,
+        activities.likes_count,
+        activities.reply_to_activity_uuid,
+        activities.expires_at,
+        activities.created_at
+      FROM public.activities
+      LEFT JOIN public.users ON users.uuid = activities.user_uuid
+      ORDER BY activities.created_at DESC
+      """)
+      print(sql)
+      with pool.connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(sql)
+          # this will return a tuple
+          # the first field being the data
+          json = cur.fetchone()
+      return json[0]
 ```
 
 ## Create and test RDS Instance

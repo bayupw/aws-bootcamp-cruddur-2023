@@ -1,0 +1,467 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Cruddur RDS Postgres CFN
+
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups:
+      - Label:
+          default: "RDS Parameters"
+        Parameters:
+          - DBInstanceId
+          - DBName
+          - DBMasterUsername
+          - DBMasterPassword
+          - DBInstanceClass
+          - DBStorageSize
+          - DBStorageType
+          - DBEngineVersion
+          - DBPort
+          - VpcId
+          - SubnetIds
+          - AvailabilityZone
+          - EnableStorageEncryption
+          - EnableMultiAZ
+          - EnablePublicAccess
+      - Label:
+          default: "Security Group Parameters"
+        Parameters:
+          - SGProtocol
+          - SGFromPort
+          - SGToPort
+          - SGCidrIp
+      - Label:
+          default: "Lambda Parameters"
+        Parameters:
+          - LambdaFunctionName
+          - Architectures
+          - LambdaRoleName
+      - Label:
+          default: "Cognito Parameters"
+        Parameters:
+          - CognitoUserPoolName
+          - CognitoClientName
+
+Parameters:
+  DBInstanceId:
+    Type: String
+    MinLength: '1'
+    MaxLength: '63'
+    Description: Enter a string for the Database Instance ID.
+    Default: cruddur-db-instance
+  DBName:
+    Type: String
+    MinLength: '1'
+    MaxLength: '63'
+    Description: Enter a string for the Database Instance Name. Must begin with a letter. Subsequent characters can be letters, underscores, or digits (0-9).
+    Default: cruddur
+  DBMasterUsername:
+    NoEcho: 'true'
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    Description: Enter a string for the Database Master Username.
+  DBMasterPassword:
+    NoEcho: 'true'
+    Type: String
+    MinLength: '8'
+    MaxLength: '41'
+    Description: Enter a string for the Database Master Password.
+  DBInstanceClass:
+    Type: String
+    AllowedValues: [db.t3.micro,db.t4g.micro]
+    Default: db.t3.micro
+  DBStorageSize:
+    Type: String
+    Default: 20
+  DBStorageType:
+    Type: String
+    Default: gp2
+  DBEngineVersion:
+    Type: String
+    AllowedValues: [14.5,14.6,14.7,15.2]
+    Default: 14.6
+  DBPort:
+    Type: String
+    Default: 5432
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Select an existing VPC
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Select at least two existing subnet(s) for RDS.
+  AvailabilityZone:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Description: Select an Availability Zone.
+  EnableStorageEncryption:
+    Type: String
+    Description: Boolean to enable storage encryption.
+    AllowedValues: [true,false]
+    Default: false
+  EnableMultiAZ:
+    Type: String
+    Description: Boolean to create a multi-AZ Amazon RDS database instance.
+    AllowedValues: [true,false]
+    Default: false
+  EnablePublicAccess:
+    Type: String
+    Description: Boolean to enable public access.
+    AllowedValues: [true,false]
+    Default: true
+
+  SGProtocol:
+    Type: String
+    Default: tcp
+  SGFromPort:
+    Type: Number
+    Default: 5432
+  SGToPort:
+    Type: Number
+    Default: 5432
+  SGCidrIp:
+    Type: String
+    Default: 1.1.1.1/32
+
+  LambdaFunctionName:
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9_-]*'
+    Description: Lambda function name.
+    Default: cruddur-post-confirmation
+  Architectures:
+    Type: String
+    Description: arm64 or x86_64.
+    AllowedValues: [arm64,x86_64]
+    Default: x86_64
+  LambdaRoleName:
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[\w+=,.@-]+'
+    Description: New IAM role name for Lambda execution.
+    Default: cruddur-post-confirmation-role
+
+  CognitoUserPoolName:
+    Type: String
+    Description: Enter a string. Must be alpha numeric 3-128 in length.
+    MinLength: 3
+    MaxLength: 128
+    AllowedPattern: '[\w\s+=,.@-]+'
+    Default: cruddur-cognito-user-pool
+  CognitoClientName:
+    Type: String
+    Description: Enter a string. Must be alpha numeric 3-128 in length.
+    MinLength: 3
+    MaxLength: 63
+    Default: cruddur-cognito-client
+    AllowedPattern: '[\w\s+=,.@-]+'
+
+Conditions:
+  CreateMultiAZ: !Equals [!Ref EnableMultiAZ, true]
+
+Resources:
+  DBEC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow incoming traffic to PostgreSQL.
+      SecurityGroupIngress:
+        - IpProtocol: !Ref SGProtocol
+          FromPort: !Ref SGFromPort
+          ToPort: !Ref SGToPort
+          CidrIp: !Ref SGCidrIp
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties: 
+      DBSubnetGroupDescription: !Sub "DB Subnet group in ${AWS::Region}"
+      DBSubnetGroupName: !Ref DBInstanceId
+      SubnetIds: !Ref SubnetIds
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-rds-dbinstance.html
+    Properties:
+      DBInstanceIdentifier: !Ref DBInstanceId
+      DBName: !Ref DBName
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: postgres
+      EngineVersion: !Ref DBEngineVersion
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Ref DBMasterPassword
+      Port: !Ref DBPort
+      StorageType: !Ref DBStorageType
+      AllocatedStorage: !Ref DBStorageSize
+      StorageEncrypted: !Ref EnableStorageEncryption
+      BackupRetentionPeriod: 0
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      MultiAZ: !Ref EnableMultiAZ
+      AvailabilityZone: !If [CreateMultiAZ, !Ref 'AWS::NoValue', !Ref AvailabilityZone]
+      PubliclyAccessible: !Ref EnablePublicAccess
+      VPCSecurityGroups: [!GetAtt DBEC2SecurityGroup.GroupId]
+
+  LambdaRole:
+    Type: AWS::IAM::Role # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-role.html
+    Properties:
+      RoleName: !Ref LambdaRoleName
+      Description: Lambda execution role for cruddur-post-confirmation function
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: [sts:AssumeRole]
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-lambda-function.html
+    Properties:
+      FunctionName: !Ref LambdaFunctionName
+      Architectures: [!Ref Architectures]
+      Runtime: python3.8
+      Handler: lambda_function.lambda_handler
+      MemorySize: 128
+      Timeout: 3
+      TracingConfig: 
+        Mode: "PassThrough"
+      Role: !GetAtt LambdaRole.Arn
+      Environment:
+        Variables:
+          PROD_CONNECTION_URL: !Join [ "", ["postgresql://", !Ref DBMasterUsername, ":", !Ref DBMasterPassword, "@", !GetAtt RDSInstance.Endpoint.Address, ":", !Ref DBPort, "/", !Ref DBName]] 
+      VpcConfig:
+        SecurityGroupIds: [!GetAtt DBEC2SecurityGroup.GroupId]
+        SubnetIds: !Ref SubnetIds
+      Code:
+        ZipFile: |
+            import json
+            import psycopg2
+            import os
+
+            def lambda_handler(event, context):
+                user = event['request']['userAttributes']
+                print('userAttributes')
+                print(user)
+
+                user_display_name  = user['name']
+                user_email         = user['email']
+                user_handle        = user['preferred_username']
+                user_cognito_id    = user['sub']
+                try:
+                  print('entered-try')
+                  sql = f"""
+                    INSERT INTO public.users (
+                      display_name, 
+                      email,
+                      handle, 
+                      cognito_user_id
+                      ) 
+                    VALUES(%s,%s,%s,%s)
+                  """
+                  print('SQL Statement ----')
+                  print(sql)
+                  conn = psycopg2.connect(os.getenv('CONNECTION_URL'))
+                  cur = conn.cursor()
+                  params = [
+                    user_display_name,
+                    user_email,
+                    user_handle,
+                    user_cognito_id
+                  ]
+                  cur.execute(sql,*params)
+                  conn.commit() 
+
+                except (Exception, psycopg2.DatabaseError) as error:
+                  print(error)
+                finally:
+                  if conn is not None:
+                      cur.close()
+                      conn.close()
+                      print('Database connection closed.')
+                return event
+      Layers: 
+        - !Sub arn:aws:lambda:${AWS::Region}:898466741470:layer:psycopg2-py38:1
+
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-cognito-userpool.html
+    Properties:
+      UsernameAttributes:
+        - email
+      UsernameConfiguration: 
+        CaseSensitive: false
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+      MfaConfiguration: "OFF"
+      AccountRecoverySetting: 
+        RecoveryMechanisms: 
+        -   Name: verified_email
+            Priority: 1
+      EmailConfiguration: 
+          EmailSendingAccount: "COGNITO_DEFAULT"
+      AdminCreateUserConfig: 
+          AllowAdminCreateUserOnly: false
+      VerificationMessageTemplate: 
+          DefaultEmailOption: "CONFIRM_WITH_CODE"
+      Schema:
+        - Name: name
+          AttributeDataType: String
+          DeveloperOnlyAttribute: false
+          Mutable: true
+          Required: true
+          StringAttributeConstraints: 
+              MinLength: 0
+              MaxLength: 2048
+        - Name: preferred_username
+          AttributeDataType: String
+          DeveloperOnlyAttribute: false
+          Mutable: true
+          Required: true
+          StringAttributeConstraints: 
+              MinLength: 0
+              MaxLength: 2048
+      UserPoolName: !Sub ${CognitoUserPoolName}
+      LambdaConfig:
+        PostConfirmation: !GetAtt LambdaFunction.Arn
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-cognito-userpoolclient.html
+    Properties:
+      UserPoolId: !Ref CognitoUserPool    
+      ClientName: !Ref CognitoClientName
+      SupportedIdentityProviders:
+        - COGNITO
+      RefreshTokenValidity: 30
+      ReadAttributes: 
+        - address
+        - birthdate
+        - email
+        - email_verified
+        - family_name
+        - gender
+        - given_name
+        - locale
+        - middle_name
+        - name
+        - nickname
+        - phone_number
+        - phone_number_verified
+        - picture
+        - preferred_username
+        - profile
+        - updated_at
+        - website
+        - zoneinfo
+      WriteAttributes: 
+        - address
+        - birthdate
+        - email
+        - family_name
+        - gender
+        - given_name
+        - locale
+        - middle_name
+        - name
+        - nickname
+        - phone_number
+        - picture
+        - preferred_username
+        - profile
+        - updated_at
+        - website
+        - zoneinfo
+      ExplicitAuthFlows: 
+        - ALLOW_CUSTOM_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+      PreventUserExistenceErrors: ENABLED
+      IdTokenValidity: 60
+      AccessTokenValidity: 60
+      TokenValidityUnits: 
+          AccessToken: minutes
+          IdToken: minutes
+          RefreshToken: days
+
+Outputs:
+  DatabaseSecurityGroupId:
+    Value: !Ref DBEC2SecurityGroup
+    Description: Security Group name.
+  DatabaseInstanceId:
+    Value: !Ref RDSInstance
+    Description: Database InstanceId.
+  DatabaseName:
+    Value: !Ref DBName
+    Description: Database Name.
+  DatabaseMasterUsername:
+    Value: !Ref DBMasterUsername
+    Description: Database master username.
+  DatabaseMasterPassword:
+    Value: !Ref DBMasterPassword
+    Description: Database master password.
+  DatabaseEndpoint:
+    Description: Database connection endpoint.
+    Value: !GetAtt RDSInstance.Endpoint.Address
+  DatabasePort:
+    Description: Database port
+    Value: !Ref DBPort
+  DatabaseConnectionURI:
+    Description: Database connection URI.
+    Value: !Join [ "", ["postgresql://", !Ref DBMasterUsername, ":", !Ref DBMasterPassword, "@", !GetAtt RDSInstance.Endpoint.Address, ":", !Ref DBPort, "/", !Ref DBName]]
+    Export:
+      Name: !Sub "${AWS::StackName}-prod-connection-uri"
+
+  LambdaFunctionArn:
+    Description: ARN of Lambda cruddur-post-confirmation function.
+    Value: !GetAtt LambdaFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-${LambdaFunctionName}"
+
+Outputs:
+  DatabaseSecurityGroupId:
+    Value: !Ref DBEC2SecurityGroup
+    Description: Security Group name.
+  DatabaseInstanceId:
+    Value: !Ref RDSInstance
+    Description: Database InstanceId.
+  DatabaseName:
+    Value: !Ref DBName
+    Description: Database Name.
+  DatabaseMasterUsername:
+    Value: !Ref DBMasterUsername
+    Description: Database master username.
+  DatabaseMasterPassword:
+    Value: !Ref DBMasterPassword
+    Description: Database master password.
+  DatabaseEndpoint:
+    Description: Database connection endpoint.
+    Value: !GetAtt RDSInstance.Endpoint.Address
+  DatabasePort:
+    Description: Database port
+    Value: !Ref DBPort
+  DatabaseConnectionURI:
+    Description: Database connection URI.
+    Value: !Join [ "", ["postgresql://", !Ref DBMasterUsername, ":", !Ref DBMasterPassword, "@", !GetAtt RDSInstance.Endpoint.Address, ":", !Ref DBPort, "/", !Ref DBName]]
+    Export:
+      Name: !Sub "${AWS::StackName}-prod-connection-uri"
+
+  LambdaFunctionArn:
+    Description: ARN of Lambda cruddur-post-confirmation function
+    Value: !GetAtt LambdaFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-${LambdaFunctionName}"
+      
+  UserPoolID:
+    Value: !Ref CognitoUserPool
+    Description: REACT_APP_AWS_USER_POOLS_ID
+    Export:
+      Name: !Sub "${AWS::StackName}-cognito-user-pool-id"
+  UserPoolClientID:
+    Value: !Ref CognitoUserPoolClient
+    Description: REACT_APP_CLIENT_ID
+    Export:
+      Name: !Sub "${AWS::StackName}-cognito-client-id"
