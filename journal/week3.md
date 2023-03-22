@@ -249,11 +249,11 @@ const onsubmit_confirm_code = async (event) => {
   }
   return false
 }
-
+```
 
 ## JWT 
 
-Go to ```backend-flask``` directory and add the following line to the `requirements.txt` file
+Go to `backend-flask` directory and add the following line to the `requirements.txt` file
 
 ```
 Flask-AWSCognito
