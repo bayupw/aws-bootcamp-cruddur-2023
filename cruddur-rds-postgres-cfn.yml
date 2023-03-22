@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 
-Description: RDS Postgres CFN
+Description: Cruddur RDS Postgres CFN
 
 Metadata: 
   AWS::CloudFormation::Interface: 
@@ -167,3 +167,5 @@ Outputs:
   DatabaseConnectionURI:
     Description: Database connection URI
     Value: !Join [ "", ["postgresql://", !Ref DBMasterUsername, ":", !Ref DBMasterPassword, "@", !GetAtt RDSInstance.Endpoint.Address, ":", !Ref DBPort, "/", !Ref DBName]]
+    Export:
+      Name: !Sub "${AWS::StackName}-prod-connection-uri"

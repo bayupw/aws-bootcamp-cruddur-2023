@@ -1,0 +1,141 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Cruddur Lambda cruddur-post-confirmation function CFN
+
+Parameters:
+  LambdaFunctionName:
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9_-]*'
+    Description: Lambda function name
+    Default: cruddur-post-confirmation
+  Architectures:
+    Type: String
+    Description: arm64 or x86_64
+    AllowedValues: [arm64,x86_64]
+    Default: x86_64
+  LambdaRoleName:
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[\w+=,.@-]+'
+    Description: New IAM role name for Lambda execution
+    Default: cruddur-post-confirmation-role
+  SecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Select existing Security Group ID(s) 
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Select existing subnet(s) 
+  ImportDBConnection:
+    Type: String
+    Description: Boolean to import import DB Connection URI from CloudFormation Export. Set true to import and input the Export name under DBExportName parameter.
+    AllowedValues: [true,false]
+    Default: false
+  DBConnectionURI:
+    Type: String
+    Description: Database Connection URI. Value will be ignored if ImportDBConnection is set to true.
+    Default: postgres://postgres:postgres#@cruddur.aws:5432/cruddur
+  DBExportName:
+    Type: String
+    Description: Enter CloudFormation export name to be imported as the Database Connection URI.
+    Default: cruddur-prod-connection-uri
+
+Conditions:
+  ImportDBConnFromExport: !Equals
+    - !Ref ImportDBConnection
+    - true
+
+Resources:
+  LambdaRole:
+    Type: AWS::IAM::Role # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-role.html
+    Properties:
+      RoleName: !Ref LambdaRoleName
+      Description: Lambda execution role for cruddur-post-confirmation function
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: [sts:AssumeRole]
+      
+  LambdaFunction:
+    Type: AWS::Lambda::Function # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-lambda-function.html
+    Properties:
+      FunctionName: !Ref LambdaFunctionName
+      Architectures: [!Ref Architectures]
+      Runtime: python3.8
+      Handler: lambda_function.lambda_handler
+      MemorySize: 128
+      Timeout: 3
+      TracingConfig: 
+        Mode: "PassThrough"
+      Role: !GetAtt LambdaRole.Arn
+      Environment:
+        Variables:
+          PROD_CONNECTION_URL: !If 
+            - ImportDBConnFromExport
+            - Fn::ImportValue:
+                !Sub ${DBExportName}
+            - !Ref DBConnectionURI
+      VpcConfig:
+        SecurityGroupIds: !Ref SecurityGroupIds
+        SubnetIds: !Ref SubnetIds
+      Code:
+        ZipFile: |
+            import json
+            import psycopg2
+            import os
+
+            def lambda_handler(event, context):
+                user = event['request']['userAttributes']
+                print('userAttributes')
+                print(user)
+
+                user_display_name  = user['name']
+                user_email         = user['email']
+                user_handle        = user['preferred_username']
+                user_cognito_id    = user['sub']
+                try:
+                  print('entered-try')
+                  sql = f"""
+                    INSERT INTO public.users (
+                      display_name, 
+                      email,
+                      handle, 
+                      cognito_user_id
+                      ) 
+                    VALUES(%s,%s,%s,%s)
+                  """
+                  print('SQL Statement ----')
+                  print(sql)
+                  conn = psycopg2.connect(os.getenv('CONNECTION_URL'))
+                  cur = conn.cursor()
+                  params = [
+                    user_display_name,
+                    user_email,
+                    user_handle,
+                    user_cognito_id
+                  ]
+                  cur.execute(sql,*params)
+                  conn.commit() 
+
+                except (Exception, psycopg2.DatabaseError) as error:
+                  print(error)
+                finally:
+                  if conn is not None:
+                      cur.close()
+                      conn.close()
+                      print('Database connection closed.')
+                return event
+      Layers: 
+        - !Sub arn:aws:lambda:${AWS::Region}:898466741470:layer:psycopg2-py38:1
+
+Outputs:
+  LambdaFunctionArn:
+    Description: ARN of Lambda cruddur-post-confirmation function
+    Value: !GetAtt LambdaFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-${LambdaFunctionName}"
