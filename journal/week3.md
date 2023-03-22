@@ -5,8 +5,6 @@
 Create AWS Cognito User Pool from AWS Console or using the following CloudFormation template: 
 https://raw.githubusercontent.com/bayupw/aws-bootcamp-cruddur-2023/main/cruddur-simple-cognito-cfn.yml
 
-Using the AWS Console we'll create a Cognito User Group
-
 ## Configure AWS Amplify
 
 Import amplify add add cognito details into the `app.js` under `frontend-react-js/src/`
