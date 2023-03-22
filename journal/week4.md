@@ -10,7 +10,6 @@ pip install -r requirements.txt
 
 cd ..
 cd frontend-react-js
-npm install aws-amplify --save
 npm install
 
 export AWS_ACCESS_KEY_ID="keyid"
@@ -81,7 +80,6 @@ schema.sql
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 DROP TABLE IF EXISTS public.users;
 DROP TABLE IF EXISTS public.activities;
-
 
 CREATE TABLE public.users (
   uuid UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -171,7 +169,13 @@ while true; do
     esac
 done
 ```
-Run scripts from `/backend-flask/bin` directory
+
+Change permission so the scripts are executable
+
+```sh
+chmod -R u+x .
+```
+Run scripts from `backend-flask/bin` directory
 
 ### Install postgres Client
 
@@ -296,4 +300,36 @@ aws rds create-db-instance \
   --no-deletion-protection
 ```
 
-`GITPOD_IP=$(curl ifconfig.me)`
+Retrieve Gitpod IP using curl to ifconfig.me and store it in env var GITPOD_IP
+
+```sh
+export GITPOD_IP=$(curl ifconfig.me)
+```
+
+use `echo` to check the GITPOD_IP: 'echo $GITPOD_IP'
+
+set the RDS DatabaseConnectionURI as `PROD_CONNECTION_URL` in env var
+
+```sh
+export PROD_CONNECTION_URL="postgresql://username:password@RDSEndpoint:Port/database"
+gp env PROD_CONNECTION_URL=="postgresql://username:password@RDSEndpoint:Port/database"
+```
+
+Connect to RDS using psql `psql $PROD_CONNECTION_URL` or using the db-connect script using parameter `prod`
+
+```sh
+cd backend-flask/bin 
+./db-connect.sh prod
+```
+
+### Set docker-compose to use RDS
+
+Update the env var `CONNECTION_URL` to the backend-flask application to use RDS
+
+```yml
+  backend-flask:
+    environment:
+      CONNECTION_URL: "${PROD_CONNECTION_URL}"
+```
+
+echo $THEIA_WORKSPACE_ROOT
