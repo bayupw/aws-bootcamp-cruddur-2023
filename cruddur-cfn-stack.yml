@@ -6,7 +6,7 @@ Metadata:
   AWS::CloudFormation::Interface: 
     ParameterGroups:
       - Label:
-          default: "RDS Parameters"
+          default: RDS Parameters
         Parameters:
           - DBInstanceId
           - DBName
@@ -24,20 +24,21 @@ Metadata:
           - EnableMultiAZ
           - EnablePublicAccess
       - Label:
-          default: "Security Group Parameters"
+          default: Security Group Parameters
         Parameters:
           - SGProtocol
           - SGFromPort
           - SGToPort
           - SGCidrIp
       - Label:
-          default: "Lambda Parameters"
+          default: Lambda Parameters
         Parameters:
-          - LambdaFunctionName
+          - LambdaPostConfirmFunctionName
+          - LambdaSchemaLoadFunctionName
           - Architectures
           - LambdaRoleName
       - Label:
-          default: "Cognito Parameters"
+          default: Cognito Parameters
         Parameters:
           - CognitoUserPoolName
           - CognitoClientName
@@ -56,11 +57,11 @@ Parameters:
     Description: Enter a string for the Database Instance Name. Must begin with a letter. Subsequent characters can be letters, underscores, or digits (0-9).
     Default: cruddur
   DBMasterUsername:
-    NoEcho: 'true'
     Type: String
     MinLength: '1'
     MaxLength: '16'
     Description: Enter a string for the Database Master Username.
+    Default: cruddurroot
   DBMasterPassword:
     NoEcho: 'true'
     Type: String
@@ -122,13 +123,20 @@ Parameters:
     Type: String
     Default: 1.1.1.1/32
 
-  LambdaFunctionName:
+  LambdaPostConfirmFunctionName:
     Type: String
     MinLength: '1'
     MaxLength: '64'
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9_-]*'
     Description: Lambda function name.
     Default: cruddur-post-confirmation
+  LambdaSchemaLoadFunctionName:
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9_-]*'
+    Description: Lambda schema load function name.
+    Default: cruddur-schema-load
   Architectures:
     Type: String
     Description: arm64 or x86_64.
@@ -140,7 +148,7 @@ Parameters:
     MaxLength: '64'
     AllowedPattern: '[\w+=,.@-]+'
     Description: New IAM role name for Lambda execution.
-    Default: cruddur-post-confirmation-role
+    Default: cruddur-lambda-execution-role
 
   CognitoUserPoolName:
     Type: String
@@ -161,15 +169,26 @@ Conditions:
   CreateMultiAZ: !Equals [!Ref EnableMultiAZ, true]
 
 Resources:
+  LambdaEC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: EC2 Security Group for Lambda.
+      VpcId: !Ref VpcId
+
   DBEC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Allow incoming traffic to PostgreSQL.
+      VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: !Ref SGProtocol
           FromPort: !Ref SGFromPort
           ToPort: !Ref SGToPort
           CidrIp: !Ref SGCidrIp
+        - IpProtocol: !Ref SGProtocol
+          FromPort: !Ref SGFromPort
+          ToPort: !Ref SGToPort
+          SourceSecurityGroupId: !GetAtt LambdaEC2SecurityGroup.GroupId
 
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -213,13 +232,13 @@ Resources:
             Service: lambda.amazonaws.com
           Action: [sts:AssumeRole]
 
-  LambdaFunction:
+  LambdaPostConfirmFunction:
     Type: AWS::Lambda::Function # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-lambda-function.html
     Properties:
-      FunctionName: !Ref LambdaFunctionName
+      FunctionName: !Ref LambdaPostConfirmFunctionName
       Architectures: [!Ref Architectures]
       Runtime: python3.8
-      Handler: lambda_function.lambda_handler
+      Handler: index.lambda_handler
       MemorySize: 128
       Timeout: 3
       TracingConfig: 
@@ -229,7 +248,7 @@ Resources:
         Variables:
           PROD_CONNECTION_URL: !Join [ "", ["postgresql://", !Ref DBMasterUsername, ":", !Ref DBMasterPassword, "@", !GetAtt RDSInstance.Endpoint.Address, ":", !Ref DBPort, "/", !Ref DBName]] 
       VpcConfig:
-        SecurityGroupIds: [!GetAtt DBEC2SecurityGroup.GroupId]
+        SecurityGroupIds: [!GetAtt LambdaEC2SecurityGroup.GroupId]
         SubnetIds: !Ref SubnetIds
       Code:
         ZipFile: |
@@ -248,6 +267,7 @@ Resources:
                 user_cognito_id    = user['sub']
                 try:
                   print('entered-try')
+                  
                   sql = f"""
                     INSERT INTO public.users (
                       display_name, 
@@ -255,23 +275,113 @@ Resources:
                       handle, 
                       cognito_user_id
                       ) 
-                    VALUES(%s,%s,%s,%s)
+                    VALUES(
+                      '{user_display_name}',
+                      '{user_email}',
+                      '{user_handle}',
+                      '{user_cognito_id}'
+                    )
                   """
                   print('SQL Statement ----')
                   print(sql)
-                  conn = psycopg2.connect(os.getenv('CONNECTION_URL'))
+
+                  # Create a connection to the database
+                  conn = psycopg2.connect(os.getenv('PROD_CONNECTION_URL'))
                   cur = conn.cursor()
-                  params = [
-                    user_display_name,
-                    user_email,
-                    user_handle,
-                    user_cognito_id
-                  ]
-                  cur.execute(sql,*params)
+                  cur.execute(sql)
                   conn.commit() 
 
                 except (Exception, psycopg2.DatabaseError) as error:
                   print(error)
+                finally:
+                  if conn is not None:
+                      cur.close()
+                      conn.close()
+                      print('Database connection closed.')
+                return event
+
+      Layers: 
+        - !Sub arn:aws:lambda:${AWS::Region}:898466741470:layer:psycopg2-py38:1
+
+  LambdaSchemaLoadFunction:
+    Type: AWS::Lambda::Function # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-lambda-function.html
+    Properties:
+      FunctionName: !Ref LambdaSchemaLoadFunctionName
+      Architectures: [!Ref Architectures]
+      Runtime: python3.8
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Timeout: 3
+      TracingConfig:
+        Mode: "PassThrough"
+      Role: !GetAtt LambdaRole.Arn
+      Environment:
+        Variables:
+          PROD_CONNECTION_URL: !Join [ "", ["postgresql://", !Ref DBMasterUsername, ":", !Ref DBMasterPassword, "@", !GetAtt RDSInstance.Endpoint.Address, ":", !Ref DBPort, "/", !Ref DBName]] 
+      VpcConfig:
+        SecurityGroupIds: [!GetAtt LambdaEC2SecurityGroup.GroupId]
+        SubnetIds: !Ref SubnetIds
+      Code:
+        ZipFile: |
+            # import cfnresponse
+            import json
+            import psycopg2
+            import os
+
+            def lambda_handler(event, context):
+                # Get the properties from the event
+                # properties  = event['ResourceProperties']
+                # resource_id = event['LogicalResourceId']
+
+                # Create a connection to the database
+                conn = psycopg2.connect(os.getenv('PROD_CONNECTION_URL'))
+
+                try:
+                  with conn.cursor() as cur:
+                      cur.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
+                      cur.execute('DROP TABLE IF EXISTS public.users;')
+                      cur.execute('DROP TABLE IF EXISTS public.activities;')
+                      cur.execute("""
+                          CREATE TABLE public.users (
+                            uuid UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+                            display_name text NOT NULL,
+                            handle text NOT NULL,
+                            email text NOT NULL,
+                            cognito_user_id text NOT NULL,
+                            created_at TIMESTAMP default current_timestamp NOT NULL
+                          );
+                      """)
+                      cur.execute("""
+                          CREATE TABLE public.activities (
+                            uuid UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+                            user_uuid UUID NOT NULL,
+                            message text NOT NULL,
+                            replies_count integer DEFAULT 0,
+                            reposts_count integer DEFAULT 0,
+                            likes_count integer DEFAULT 0,
+                            reply_to_activity_uuid integer,
+                            expires_at TIMESTAMP,
+                            created_at TIMESTAMP default current_timestamp NOT NULL
+                          );
+                      """)
+
+                  # Commit the transaction
+                  conn.commit() 
+
+                  # Send the success response to CloudFormation
+                  response_data = {'message': 'Table created successfully'}
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+
+                except (Exception, psycopg2.DatabaseError) as error:
+                  print(error)
+
+                  # Roll back the transaction
+                  conn.rollback()
+
+                  # Send the failure response to CloudFormation
+                  response_data = {'error': str(error)}
+                  cfnresponse.send(event, context, cfnresponse.FAILED, response_data)
+
                 finally:
                   if conn is not None:
                       cur.close()
@@ -327,7 +437,7 @@ Resources:
               MaxLength: 2048
       UserPoolName: !Sub ${CognitoUserPoolName}
       LambdaConfig:
-        PostConfirmation: !GetAtt LambdaFunction.Arn
+        PostConfirmation: !GetAtt LambdaPostConfirmFunction.Arn
 
   CognitoUserPoolClient:
     Type: AWS::Cognito::UserPoolClient # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-cognito-userpoolclient.html
@@ -387,39 +497,20 @@ Resources:
           IdToken: minutes
           RefreshToken: days
 
-Outputs:
-  DatabaseSecurityGroupId:
-    Value: !Ref DBEC2SecurityGroup
-    Description: Security Group name.
-  DatabaseInstanceId:
-    Value: !Ref RDSInstance
-    Description: Database InstanceId.
-  DatabaseName:
-    Value: !Ref DBName
-    Description: Database Name.
-  DatabaseMasterUsername:
-    Value: !Ref DBMasterUsername
-    Description: Database master username.
-  DatabaseMasterPassword:
-    Value: !Ref DBMasterPassword
-    Description: Database master password.
-  DatabaseEndpoint:
-    Description: Database connection endpoint.
-    Value: !GetAtt RDSInstance.Endpoint.Address
-  DatabasePort:
-    Description: Database port
-    Value: !Ref DBPort
-  DatabaseConnectionURI:
-    Description: Database connection URI.
-    Value: !Join [ "", ["postgresql://", !Ref DBMasterUsername, ":", !Ref DBMasterPassword, "@", !GetAtt RDSInstance.Endpoint.Address, ":", !Ref DBPort, "/", !Ref DBName]]
-    Export:
-      Name: !Sub "${AWS::StackName}-prod-connection-uri"
+  OnCognitoSignupPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt LambdaPostConfirmFunction.Arn
+      Principal: "cognito-idp.amazonaws.com"
+      SourceArn: !Join [ "", [ "arn:aws:cognito-idp", ":", !Ref "AWS::Region", ":", !Ref "AWS::AccountId", ":", "userpool/", !Ref CognitoUserPool] ]
 
-  LambdaFunctionArn:
-    Description: ARN of Lambda cruddur-post-confirmation function.
-    Value: !GetAtt LambdaFunction.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-${LambdaFunctionName}"
+  # need to update python code to handle cfnresponse properly
+  # InvokeLambdaSchemaLoad:
+  #   Type: AWS::CloudFormation::CustomResource
+  #   Properties:
+  #     ServiceToken: !GetAtt LambdaSchemaLoadFunction.Arn
+  #     Endpoint: !GetAtt RDSInstance.Endpoint.Address 
 
 Outputs:
   DatabaseSecurityGroupId:
@@ -437,8 +528,8 @@ Outputs:
   DatabaseMasterPassword:
     Value: !Ref DBMasterPassword
     Description: Database master password.
-  DatabaseEndpoint:
-    Description: Database connection endpoint.
+  DatabaseEndpointAddress:
+    Description: Database connection endpoint address.
     Value: !GetAtt RDSInstance.Endpoint.Address
   DatabasePort:
     Description: Database port
@@ -449,12 +540,21 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-prod-connection-uri"
 
-  LambdaFunctionArn:
+  LambdaPostConfirmFunctionArn:
+    Description: ARN of Lambda cruddur-schema-load function.
+    Value: !GetAtt LambdaPostConfirmFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-${LambdaPostConfirmFunctionName}"
+
+  LambdaSchemaLoadFunctionArn:
     Description: ARN of Lambda cruddur-post-confirmation function
-    Value: !GetAtt LambdaFunction.Arn
+    Value: !GetAtt LambdaSchemaLoadFunction.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-${LambdaFunctionName}"
-      
+      Name: !Sub "${AWS::StackName}-${LambdaSchemaLoadFunctionName}"
+  CLIInvokeLambdaSchemaLoadFunction:
+    Description: aws cli to invoke lambda cruddur-schema-load function
+    Value: !Sub "aws lambda invoke --function-name ${LambdaSchemaLoadFunctionName} response.json --region ${AWS::Region}"
+
   UserPoolID:
     Value: !Ref CognitoUserPool
     Description: REACT_APP_AWS_USER_POOLS_ID
