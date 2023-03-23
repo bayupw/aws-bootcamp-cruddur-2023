@@ -5,11 +5,10 @@
 Set environment variables and run docker compose up
 
 ```sh
-cd backend-flask
+cd $THEIA_WORKSPACE_ROOT/backend-flask
 pip install -r requirements.txt
 
-cd ..
-cd frontend-react-js
+cd $THEIA_WORKSPACE_ROOT/frontend-react-js
 npm install
 
 export AWS_ACCESS_KEY_ID="keyid"
@@ -24,7 +23,7 @@ gp env AWS_DEFAULT_REGION="ap-southeast-2"
 gp env COGNITO_USER_POOLS_ID="UserPoolClientID"
 gp env COGNITO_CLIENT_ID="UserPoolID"
 
-cd ..
+cd $THEIA_WORKSPACE_ROOT
 docker compose -f "docker-compose.yml" up -d --build
 ```
 
@@ -173,6 +172,7 @@ done
 Change permission so the scripts are executable
 
 ```sh
+cd $THEIA_WORKSPACE_ROOT/backend-flask/bin
 chmod -R u+x .
 ```
 Run scripts from `backend-flask/bin` directory
@@ -331,5 +331,3 @@ Update the env var `CONNECTION_URL` to the backend-flask application to use RDS
     environment:
       CONNECTION_URL: "${PROD_CONNECTION_URL}"
 ```
-
-echo $THEIA_WORKSPACE_ROOT
