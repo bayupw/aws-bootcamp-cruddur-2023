@@ -6,7 +6,7 @@ Metadata:
   AWS::CloudFormation::Interface: 
     ParameterGroups:
       - Label:
-          default: "RDS Parameters"
+          default: RDS Parameters
         Parameters:
           - DBInstanceId
           - DBName
@@ -18,13 +18,13 @@ Metadata:
           - DBEngineVersion
           - DBPort
           - VpcId
-          - SubnetId
+          - SubnetIds
           - AvailabilityZone
           - EnableStorageEncryption
           - EnableMultiAZ
           - EnablePublicAccess
       - Label:
-          default: "Security Group Parameters"
+          default: Security Group Parameters
         Parameters:
           - SGProtocol
           - SGFromPort
@@ -36,26 +36,26 @@ Parameters:
     Type: String
     MinLength: '1'
     MaxLength: '63'
-    Description: Database Instance ID
+    Description: Enter a string for the Database Instance ID.
     Default: cruddur-db-instance
   DBName:
     Type: String
     MinLength: '1'
     MaxLength: '63'
-    Description: Database Instance Name
+    Description: Enter a string for the Database Instance Name. Must begin with a letter. Subsequent characters can be letters, underscores, or digits (0-9).
     Default: cruddur
   DBMasterUsername:
     NoEcho: 'true'
     Type: String
     MinLength: '1'
     MaxLength: '16'
-    Description: Database Master Username
+    Description: Enter a string for the Database Master Username.
   DBMasterPassword:
     NoEcho: 'true'
     Type: String
     MinLength: '8'
     MaxLength: '41'
-    Description: Database Master Password
+    Description: Enter a string for the Database Master Password.
   DBInstanceClass:
     Type: String
     AllowedValues: [db.t3.micro,db.t4g.micro]
@@ -76,25 +76,25 @@ Parameters:
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: Select an existing VPC
-  SubnetId:
+  SubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
-    Description: Select existing subnet(s) for RDS
+    Description: Select at least two existing subnet(s) for RDS.
   AvailabilityZone:
     Type: AWS::EC2::AvailabilityZone::Name
-    Description: Select an existing Availability Zone
+    Description: Select an Availability Zone.
   EnableStorageEncryption:
     Type: String
-    Description: Enable storage encryption
+    Description: Boolean to enable storage encryption.
     AllowedValues: [true,false]
     Default: false
   EnableMultiAZ:
     Type: String
-    Description: Create a multi-AZ Amazon RDS database instance
+    Description: Boolean to create a multi-AZ Amazon RDS database instance.
     AllowedValues: [true,false]
     Default: false
   EnablePublicAccess:
     Type: String
-    Description: Enable public access
+    Description: Boolean to enable public access.
     AllowedValues: [true,false]
     Default: true
 
@@ -111,6 +111,9 @@ Parameters:
     Type: String
     Default: 1.1.1.1/32
 
+Conditions:
+  CreateMultiAZ: !Equals [!Ref EnableMultiAZ, true]
+
 Resources:
   DBEC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -121,6 +124,13 @@ Resources:
           FromPort: !Ref SGFromPort
           ToPort: !Ref SGToPort
           CidrIp: !Ref SGCidrIp
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties: 
+      DBSubnetGroupDescription: !Sub "DB Subnet group in ${AWS::Region}"
+      DBSubnetGroupName: !Ref DBInstanceId
+      SubnetIds: !Ref SubnetIds
 
   RDSInstance:
     Type: AWS::RDS::DBInstance # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-rds-dbinstance.html
@@ -137,35 +147,36 @@ Resources:
       AllocatedStorage: !Ref DBStorageSize
       StorageEncrypted: !Ref EnableStorageEncryption
       BackupRetentionPeriod: 0
+      DBSubnetGroupName: !Ref DBSubnetGroup
       MultiAZ: !Ref EnableMultiAZ
-      AvailabilityZone: !Ref AvailabilityZone
+      AvailabilityZone: !If [CreateMultiAZ, !Ref 'AWS::NoValue', !Ref AvailabilityZone]
       PubliclyAccessible: !Ref EnablePublicAccess
       VPCSecurityGroups: [!GetAtt DBEC2SecurityGroup.GroupId]
 
 Outputs:
   DatabaseSecurityGroupId:
     Value: !Ref DBEC2SecurityGroup
-    Description: Security Group Id
+    Description: Security Group name.
   DatabaseInstanceId:
     Value: !Ref RDSInstance
-    Description: Database InstanceId
+    Description: Database InstanceId.
   DatabaseName:
     Value: !Ref DBName
-    Description: Database Name
+    Description: Database Name.
   DatabaseMasterUsername:
     Value: !Ref DBMasterUsername
-    Description: Database master username
+    Description: Database master username.
   DatabaseMasterPassword:
     Value: !Ref DBMasterPassword
-    Description: Database master password
+    Description: Database master password.
   DatabaseEndpoint:
-    Description: Database connection endpoint
+    Description: Database connection endpoint.
     Value: !GetAtt RDSInstance.Endpoint.Address
   DatabasePort:
     Description: Database port
     Value: !Ref DBPort
   DatabaseConnectionURI:
-    Description: Database connection URI
+    Description: Database connection URI.
     Value: !Join [ "", ["postgresql://", !Ref DBMasterUsername, ":", !Ref DBMasterPassword, "@", !GetAtt RDSInstance.Endpoint.Address, ":", !Ref DBPort, "/", !Ref DBName]]
     Export:
       Name: !Sub "${AWS::StackName}-prod-connection-uri"

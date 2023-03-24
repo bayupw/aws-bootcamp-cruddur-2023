@@ -1,6 +1,6 @@
 from psycopg_pool import ConnectionPool
 import os
-import re
+import re # regex
 import sys
 from flask import current_app as app
 
@@ -8,9 +8,13 @@ class Db:
   def __init__(self):
     self.init_pool()
 
+  def init_pool(self):
+    connection_url = os.getenv("CONNECTION_URL")
+    self.pool = ConnectionPool(connection_url)
+
   def template(self,*args):
-    pathing = list((app.root_path,'db','sql',) + args)
-    pathing[-1] = pathing[-1] + ".sql"
+    pathing = list((app.root_path,'db','sql',) + args)    # /backend/db/sql/ 
+    pathing[-1] = pathing[-1] + ".sql"                    # get last element and append with .sql
 
     template_path = os.path.join(*pathing)
 
@@ -23,12 +27,6 @@ class Db:
       template_content = f.read()
     return template_content
 
-  def init_pool(self):
-    connection_url = os.getenv("CONNECTION_URL")
-    self.pool = ConnectionPool(connection_url)
-
-  # we want to commit data such as an insert
-  # be sure to check for RETURNING in all uppercases
   def print_params(self,params):
     blue = '\033[94m'
     no_color = '\033[0m'
@@ -36,6 +34,7 @@ class Db:
     for key, value in params.items():
       print(key, ":", value)
 
+  # Print SQL with colors
   def print_sql(self,title,sql):
     cyan = '\033[96m'
     no_color = '\033[0m'
@@ -50,17 +49,20 @@ class Db:
 
     try:
       with self.pool.connection() as conn:
-        cur =  conn.cursor()
+        cur = conn.cursor()
         cur.execute(sql,params)
+
         if is_returning_id:
           returning_id = cur.fetchone()[0]
+        # Commit the transaction
         conn.commit() 
         if is_returning_id:
           return returning_id
+
     except Exception as err:
       self.print_sql_err(err)
 
-  # when we want to return a json object
+  # return a json object
   def query_array_json(self,sql,params={}):
     self.print_sql('array',sql)
 
@@ -71,9 +73,8 @@ class Db:
         json = cur.fetchone()
         return json[0]
 
-  # When we want to return an array of json objects
+  # return an array of json objects
   def query_object_json(self,sql,params={}):
-
     self.print_sql('json',sql)
     self.print_params(params)
     wrapped_sql = self.query_wrap_object(sql)
@@ -102,7 +103,7 @@ class Db:
     ) array_row);
     """
     return sql
-
+    
   def print_sql_err(self,err):
     # get details about the exception
     err_type, err_obj, traceback = sys.exc_info()

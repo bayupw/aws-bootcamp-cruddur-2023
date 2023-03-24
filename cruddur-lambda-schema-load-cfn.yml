@@ -1,0 +1,167 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Cruddur DB Schema Load Lambda Function CFN
+
+Parameters:
+  LambdaSchemaLoadFunctionName:
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9_-]*'
+    Description: Lambda schema load function name.
+    Default: cruddur-schema-load
+  Architectures:
+    Type: String
+    Description: arm64 or x86_64.
+    AllowedValues: [arm64,x86_64]
+    Default: x86_64
+  LambdaRoleName:
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[\w+=,.@-]+'
+    Description: New IAM role name for Lambda execution.
+    Default: cruddur-lambda-execution-role
+  SecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Select existing Security Group ID(s) 
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Select at least two existing subnet(s).
+  ImportDBConnection:
+    Type: String
+    Description: Boolean to import import DB Connection URI from CloudFormation Export. Set true to import and input the Export name under DBExportName parameter.
+    AllowedValues: [true,false]
+    Default: false
+  DBConnectionURI:
+    Type: String
+    Description: Database Connection URI. Value will be ignored if ImportDBConnection is set to true.
+    Default: postgres://postgres:postgres#@cruddur.aws:5432/cruddur
+  DBExportName:
+    Type: String
+    Description: Enter CloudFormation export name to be imported as the Database Connection URI.
+    Default: cruddur-prod-connection-uri
+
+Conditions:
+  ImportDBConnFromExport: !Equals
+    - !Ref ImportDBConnection
+    - true
+
+Resources:
+  LambdaRole:
+    Type: AWS::IAM::Role # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-role.html
+    Properties:
+      RoleName: !Ref LambdaRoleName
+      Description: Lambda execution role for db-schema-load function
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: [sts:AssumeRole]
+
+  LambdaSchemaLoadFunction:
+    Type: AWS::Lambda::Function # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-lambda-function.html
+    Properties:
+      FunctionName: !Ref LambdaSchemaLoadFunctionName
+      Architectures: [!Ref Architectures]
+      Runtime: python3.8
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Timeout: 3
+      TracingConfig:
+        Mode: "PassThrough"
+      Role: !GetAtt LambdaRole.Arn
+      Environment:
+        Variables:
+          PROD_CONNECTION_URL: !If 
+            - ImportDBConnFromExport
+            - Fn::ImportValue:
+                !Sub ${DBExportName}
+            - !Ref DBConnectionURI
+      VpcConfig:
+        SecurityGroupIds: !Ref SecurityGroupIds
+        SubnetIds: !Ref SubnetIds
+      Code:
+        ZipFile: |
+            # import cfnresponse
+            import json
+            import psycopg2
+            import os
+
+            def lambda_handler(event, context):
+                # Get the properties from the event
+                # properties  = event['ResourceProperties']
+                # resource_id = event['LogicalResourceId']
+
+                # Create a connection to the database
+                conn = psycopg2.connect(os.getenv('PROD_CONNECTION_URL'))
+
+                try:
+                  with conn.cursor() as cur:
+                      cur.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
+                      cur.execute('DROP TABLE IF EXISTS public.users;')
+                      cur.execute('DROP TABLE IF EXISTS public.activities;')
+                      cur.execute("""
+                          CREATE TABLE public.users (
+                            uuid UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+                            display_name text NOT NULL,
+                            handle text NOT NULL,
+                            email text NOT NULL,
+                            cognito_user_id text NOT NULL,
+                            created_at TIMESTAMP default current_timestamp NOT NULL
+                          );
+                      """)
+                      cur.execute("""
+                          CREATE TABLE public.activities (
+                            uuid UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+                            user_uuid UUID NOT NULL,
+                            message text NOT NULL,
+                            replies_count integer DEFAULT 0,
+                            reposts_count integer DEFAULT 0,
+                            likes_count integer DEFAULT 0,
+                            reply_to_activity_uuid integer,
+                            expires_at TIMESTAMP,
+                            created_at TIMESTAMP default current_timestamp NOT NULL
+                          );
+                      """)
+
+                  # Commit the transaction
+                  conn.commit() 
+
+                  # Send the success response to CloudFormation
+                  # response_data = {'message': 'Table created successfully'}
+                  # cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+
+                except (Exception, psycopg2.DatabaseError) as error:
+                  print(error)
+
+                  # Roll back the transaction
+                  conn.rollback()
+
+                  # Send the failure response to CloudFormation
+                  # response_data = {'error': str(error)}
+                  # cfnresponse.send(event, context, cfnresponse.FAILED, response_data)
+
+                finally:
+                  if conn is not None:
+                      cur.close()
+                      conn.close()
+                      print('Database connection closed.')
+                return event
+      Layers: 
+        - !Sub arn:aws:lambda:${AWS::Region}:898466741470:layer:psycopg2-py38:1
+
+Outputs:
+  LambdaSchemaLoadFunctionArn:
+    Description: ARN of Lambda db-schema-load function
+    Value: !GetAtt LambdaSchemaLoadFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-${LambdaSchemaLoadFunctionName}"
+  CLIInvokeLambdaSchemaLoadFunction:
+    Description: aws cli to invoke lambda cruddur-schema-load function
+    Value: !Sub "aws lambda invoke --function-name ${LambdaSchemaLoadFunctionName} response.json --region ${AWS::Region}"
+    Export:
+      Name: !Sub "${AWS::StackName}-aws-cli-db-schema-load"

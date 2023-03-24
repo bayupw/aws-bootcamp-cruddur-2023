@@ -15,6 +15,7 @@ from services.messages import *
 from services.create_message import *
 from services.show_activity import *
 
+# JWT
 from lib.cognito_jwt_token import CognitoJwtToken, extract_access_token, TokenVerifyError
 
 # ----- HoneyComb -----
@@ -54,16 +55,24 @@ from flask import got_request_exception
 provider = TracerProvider()
 processor = BatchSpanProcessor(OTLPSpanExporter())
 provider.add_span_processor(processor)
+
 trace.set_tracer_provider(provider)
 tracer = trace.get_tracer(__name__)
 
+# ----- AWS X-Ray ----- uncomment to enable AWS X-Ray
+# xray_url = os.getenv("AWS_XRAY_URL")
+# xray_recorder.configure(service='cruddur-backend', dynamic_naming=xray_url)
+# XRayMiddleware(app, xray_recorder)
+
 # ----- HoneyComb -----
 # Show this in the logs within the backend-flask app (STDOUT)
-simple_processor = SimpleSpanProcessor(ConsoleSpanExporter())
-provider.add_span_processor(simple_processor)
+# simple_processor = SimpleSpanProcessor(ConsoleSpanExporter())
+# provider.add_span_processor(simple_processor)
 
+# Flask
 app = Flask(__name__)
 
+# JWT
 cognito_jwt_token = CognitoJwtToken(
   user_pool_id=os.getenv("AWS_COGNITO_USER_POOL_ID"), 
   user_pool_client_id=os.getenv("AWS_COGNITO_USER_POOL_CLIENT_ID"),
@@ -75,10 +84,6 @@ cognito_jwt_token = CognitoJwtToken(
 FlaskInstrumentor().instrument_app(app)
 RequestsInstrumentor().instrument()
 
-# ----- AWS X-Ray ----- uncomment to enable AWS X-Ray
-# xray_url = os.getenv("AWS_XRAY_URL")
-# xray_recorder.configure(service='cruddur-backend', dynamic_naming=xray_url)
-# XRayMiddleware(app, xray_recorder)
 
 frontend = os.getenv('FRONTEND_URL')
 backend = os.getenv('BACKEND_URL')
@@ -91,6 +96,7 @@ cors = CORS(
   methods="OPTIONS,GET,HEAD,POST"
 )
 
+# ----- CloudWatch Logs -----
 # @app.after_request
 # def after_request(response):
 #     timestamp = strftime('[%Y-%b-%d %H:%M]')
@@ -131,7 +137,7 @@ def data_message_groups():
 
 @app.route("/api/messages/@<string:handle>", methods=['GET'])
 def data_messages(handle):
-  user_sender_handle = 'andrewbrown'
+  user_sender_handle = request.json["user_handle"]
   user_receiver_handle = request.args.get('user_reciever_handle')
 
   model = Messages.run(user_sender_handle=user_sender_handle, user_receiver_handle=user_receiver_handle)
@@ -144,7 +150,7 @@ def data_messages(handle):
 @app.route("/api/messages", methods=['POST','OPTIONS'])
 @cross_origin()
 def data_create_message():
-  user_sender_handle = 'andrewbrown'
+  user_sender_handle = request.json["user_handle"]
   user_receiver_handle = request.json['user_receiver_handle']
   message = request.json['message']
 
@@ -156,6 +162,7 @@ def data_create_message():
   return
 
 @app.route("/api/activities/home", methods=['GET'])
+# @xray_recorder.capture('activities_home')
 def data_home():
   access_token = extract_access_token(request.headers)
   try:
@@ -168,7 +175,7 @@ def data_home():
   except TokenVerifyError as e:
     # unauthenticated request
     app.logger.debug(e)
-    app.logger.debug("authenticated")
+    app.logger.debug("unauthenticated")
     data = HomeActivities.run()
   return data, 200
 
@@ -198,7 +205,7 @@ def data_search():
 @app.route("/api/activities", methods=['POST','OPTIONS'])
 @cross_origin()
 def data_activities():
-  user_handle  = 'andrewbrown'
+  user_handle = request.json["user_handle"]
   message = request.json['message']
   ttl = request.json['ttl']
   model = CreateActivity.run(message, user_handle, ttl)
@@ -216,7 +223,7 @@ def data_show_activity(activity_uuid):
 @app.route("/api/activities/<string:activity_uuid>/reply", methods=['POST','OPTIONS'])
 @cross_origin()
 def data_activities_reply(activity_uuid):
-  user_handle  = 'andrewbrown'
+  user_handle = request.json["user_handle"]
   message = request.json['message']
   model = CreateReply.run(message, user_handle, activity_uuid)
   if model['errors'] is not None:
