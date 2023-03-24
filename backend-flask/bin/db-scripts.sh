@@ -15,6 +15,10 @@ while true; do
 
     echo "30. Execute db-drop.sh"
     
+    echo "51. Execute db-connect.sh prod"
+    echo "52. Execute db-session.sh prod"
+    echo "53. Execute db-schema-load.sh prod"
+
     echo "99. Exit"
 
     # get the user's input
@@ -29,6 +33,9 @@ while true; do
         22) ./db-schema-load.sh;;
         23) ./db-seed.sh;;
         30) ./db-drop.sh;;
+        51) ./db-connect.sh prod;;
+        52) ./db-sessions.sh prod;;
+        53) ./db-schema-load.sh prod;;
         99) exit;;
         *) echo "Invalid choice. Please try again.";;
     esac

@@ -1,6 +1,45 @@
 # Week 4 — Postgres and RDS
 
-## Test Postgres DB locally on docker container
+There are few sections in this journal
+- [Install Postgres Client](#install-postgres-client)
+- [Test Postgres Locally](#test-postgres-locally)
+- [Create SQL Scripts](#create-sql-scripts)
+- [Create Bash Scripts](#create-bash-scripts)
+- [Create DB python functions](#create-db-python-functions)
+- [Create and Test RDS Instance](#create-and-test-rds-instance)
+- [Update docker-compose to use RDS](#update-docker-compose-to-use-rds)
+- [DB Schema Load to RDS](#db-schema-load-to-rds)
+- [Lambda Function for DB Schema Load](#lambda-function-for-db-schema-load)
+- [Lambda Function to Update RDS](#lambda-function-to-update-rds)
+- [All-in-one Week 4 CFN stack](#all-in-one-week-4-cfn-stack)
+
+![Week 4 Cloud Infrastructure](../_docs/assets/cruddur-week-4-diagram.png)
+
+## Install Postgres Client
+
+Install postgres client https://www.psycopg.org/psycopg3/ locally to test database connectivity and query on the containers
+
+Add the env var `CONNECTION_URL` to the backend-flask application:
+
+```yml
+  backend-flask:
+    environment:
+      CONNECTION_URL: "${CONNECTION_URL}"
+```
+
+Add psycopg to backend-flask `requirements.txt`
+
+```
+psycopg[binary]
+psycopg[pool]
+```
+
+Install psycopg 
+```
+pip install -r requirements.txt
+```
+
+## Test Postgres Locally
 
 Set environment variables and run docker compose up
 
@@ -62,13 +101,13 @@ Postgres connection URI format: `postgresql://[userspec@][hostspec][/dbname][?pa
 Reference: https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
 
 ```sh
-export CONNECTION_URL="postgresql://postgres:password@127.0.0.1:5432/cruddur"
-gp env CONNECTION_URL="postgresql://postgres:password@127.0.0.1:5432/cruddur"
+export LOCAL_CONNECTION_URL="postgresql://postgres:password@127.0.0.1:5432/cruddur"
+gp env LOCAL_CONNECTION_URL="postgresql://postgres:password@127.0.0.1:5432/cruddur"
 ```
 
 Test connection URL using psql `psql $CONNECTION_URL`
 
-### Create .sql scripts
+## Create SQL Scripts
 
 Create .sql scripts and place it under new directory `db` under `backend-flask/db`
 - schema.sql: sql scripts to create schema/tables
@@ -118,7 +157,7 @@ VALUES
   )
 ```
 
-### Create .sh bash scripts to interact with postgre sql
+## Create Bash Scripts
 
 Create scripts and place it under new directory `bin` under `backend-flask/bin`
 - db-scripts.sh: scripts to for interactive option
@@ -177,108 +216,21 @@ chmod -R u+x .
 ```
 Run scripts from `backend-flask/bin` directory
 
-### Install postgres Client
+## Create DB python functions
 
-Install postgres client https://www.psycopg.org/psycopg3/ locally to test database connectivity and query on the containers
+Create SQL related functions in a file [db.py](./backend-flask/lib/db.py) under `backend-flask/lib`
+The functions will use libraries from [psycopg](https://www.psycopg.org/psycopg3/docs/index.html)
 
-Add the env var `CONNECTION_URL` to the backend-flask application:
+Create common SQL commands under `backend-flask/db/sql/activities`
+- [create.sql](./backend-flask/sql/activities/create.sql)
+- [home.sql](./backend-flask/sql/activities/home.sql)
+- [object.sql](./backend-flask/sql/activities/object.sql)
 
-```yml
-  backend-flask:
-    environment:
-      CONNECTION_URL: "${CONNECTION_URL}"
-```
+## Create and Test RDS Instance
 
-Add psycopg to backend-flask `requirements.txt`
+Create RDS instance via AWS Console or aws cli or CloudFormation template
 
-```
-psycopg[binary]
-psycopg[pool]
-```
-
-Install psycopg 
-```
-pip install -r requirements.txt
-```
-
-### Code DB connection pooling
-
-Create new file `db.py` under `backend-flask/lib`
-
-db.py
-```py
-from psycopg_pool import ConnectionPool
-import os
-
-def query_wrap_object(template):
-  sql = f"""
-  (SELECT COALESCE(row_to_json(object_row),'{{}}'::json) FROM (
-  {template}
-  ) object_row);
-  """
-  return sql
-
-def query_wrap_array(template):
-  sql = f"""
-  (SELECT COALESCE(array_to_json(array_agg(row_to_json(array_row))),'[]'::json) FROM (
-  {template}
-  ) array_row);
-  """
-  return sql
-
-connection_url = os.getenv("CONNECTION_URL")
-pool = ConnectionPool(connection_url)
-```
-
-Import `db.py` into `home_activities.py` and update the code to use the connection pool
-
-```py
-from datetime import datetime, timedelta, timezone
-from opentelemetry import trace
-from lib.db import pool, query_wrap_object, query_wrap_array
-
-tracer = trace.get_tracer("home.activities")
-
-class HomeActivities:
-  def run(cognito_user_id=None):
-    print("HOME ACTIVITY")
-    #logger.info("HomeActivities")
-    with tracer.start_as_current_span("home-activites-mock-data"):
-      span = trace.get_current_span()
-      now = datetime.now(timezone.utc).astimezone()
-      span.set_attribute("app.now", now.isoformat())
-
-      sql = query_wrap_array("""
-      SELECT
-        activities.uuid,
-        users.display_name,
-        users.handle,
-        activities.message,
-        activities.replies_count,
-        activities.reposts_count,
-        activities.likes_count,
-        activities.reply_to_activity_uuid,
-        activities.expires_at,
-        activities.created_at
-      FROM public.activities
-      LEFT JOIN public.users ON users.uuid = activities.user_uuid
-      ORDER BY activities.created_at DESC
-      """)
-      print(sql)
-      with pool.connection() as conn:
-        with conn.cursor() as cur:
-          cur.execute(sql)
-          # this will return a tuple
-          # the first field being the data
-          json = cur.fetchone()
-      return json[0]
-```
-
-## Create and test RDS Instance
-
-Create RDS instance via AWS Console or aws CLI or CloudFormation template
-https://raw.githubusercontent.com/bayupw/aws-bootcamp-cruddur-2023/main/cruddur-rds-postgres-cfn.yml
-
+AWS CLI to create RDS
 ```sh
 aws rds create-db-instance \
   --db-instance-identifier cruddur-db-instance \
@@ -286,7 +238,7 @@ aws rds create-db-instance \
   --db-instance-class db.t3.micro \
   --engine postgres \
   --engine-version  14.6 \
-  --master-username root \
+  --master-username cruddurroot \
   --master-user-password <password> \
   --allocated-storage 20 \
   --availability-zone <region><az> \
@@ -295,39 +247,160 @@ aws rds create-db-instance \
   --no-multi-az \
   --storage-type gp2 \
   --publicly-accessible \
-  --storage-encrypted \
   --performance-insights-retention-period 7 \
   --no-deletion-protection
 ```
 
-Retrieve Gitpod IP using curl to ifconfig.me and store it in env var GITPOD_IP
+When RDS has Public Access enabled, the RDS ENI will have both private IP and public IP as per the following example
+```
+RDSNetworkInterface: eni-012345678
+Private IP: 172.31.32.x | ip-172.31.32.x.region.compute.internal
+Public IP: 52.64.194.x | ec2-52-64-194-x.region.compute.amazonaws.com
+Aliases: db-instance-identifier.xyz.region.rds.amazonaws.com
+```
+
+By default, the RDS will create a network interface (ENI) in the default security group on default VPC.
+Add inbound rules to allow Gitpod to access the RDS.
+
+To retrieve Gitpod IP, use curl to ifconfig.me and store it in env var GITPOD_IP
 
 ```sh
 export GITPOD_IP=$(curl ifconfig.me)
 ```
 
-use `echo` to check the GITPOD_IP: 'echo $GITPOD_IP'
+use `echo` to check the IP Address: 'echo $GITPOD_IP'
 
-set the RDS DatabaseConnectionURI as `PROD_CONNECTION_URL` in env var
+The inbound rules can then be added via UI or aws cli
+
+Locate the RDS Endpoint on the UI or CLI, format would be like below:
+`<password>@<db-instance-id>.<xyz>.<region>.rds.amazonaws.com`
+
+On the Gitpod, set the RDS DatabaseConnectionURI `PROD_CONNECTION_URL` in env var with the following format
+`postgresql://cruddurroot:<password>@<rds-endpoint>:<port>/<db-name>`
+
+Sample format:
+`postgresql://cruddurroot:password@database-1.abcde.us-east-1.rds.amazonaws.com:5432/cruddur`
 
 ```sh
-export PROD_CONNECTION_URL="postgresql://username:password@RDSEndpoint:Port/database"
-gp env PROD_CONNECTION_URL=="postgresql://username:password@RDSEndpoint:Port/database"
+export PROD_CONNECTION_URL="postgresql://cruddurroot:password@database-1.abcde.us-east-1.rds.amazonaws.com:5432/cruddur"
+gp env PROD_CONNECTION_URL="postgresql://cruddurroot:password@database-1.abcde.us-east-1.rds.amazonaws.com:5432/cruddur"
 ```
 
 Connect to RDS using psql `psql $PROD_CONNECTION_URL` or using the db-connect script using parameter `prod`
 
 ```sh
-cd backend-flask/bin 
+cd $THEIA_WORKSPACE_ROOT/backend-flask/bin 
 ./db-connect.sh prod
 ```
 
-### Set docker-compose to use RDS
+### Update docker-compose to Use RDS
 
-Update the env var `CONNECTION_URL` to the backend-flask application to use RDS
+Update the env var `PROD_CONNECTION_URL` to the backend-flask application to use RDS
+Add env var into docker-compose.yml
 
 ```yml
   backend-flask:
     environment:
       CONNECTION_URL: "${PROD_CONNECTION_URL}"
 ```
+
+### DB Schema Load to RDS 
+
+RDS will create a DB but will have no schema loaded.
+Use the same `db-schema-load` script with parameter `prod` so it will execute against RDS.
+Alternatively, create a Lambda function for this, see [Lambda Function for DB Schema Load](#lambda-function-for-db-schema-load)
+
+```sh
+cd $THEIA_WORKSPACE_ROOT/backend-flask/bin 
+./db-schema-load.sh prod
+```
+
+Connect to the database and check that tables has been created
+```sh
+cd $THEIA_WORKSPACE_ROOT/backend-flask/bin 
+./db-connect.sh prod
+\dt
+```
+
+#### Lambda Function for DB Schema Load 
+
+DB schema load can also be done via Lambda.
+Code location: [cruddur-schema-load.py](./aws/lambdas/cruddur-schema-load.py)
+
+Make sure the Lambda has the following configuration
+- python 3.8 engine
+- Connected to VPC and the assigned Security Group is allowed to access RDS
+- environment variable with the key: PROD_CONNECTION_URL and value of the Database Connection URI in RDS
+
+Invoke the lambda function via UI or aws cli after the function is ready
+```sh
+aws lambda invoke --function-name <lambda-function-name> response.json --region <region>
+```
+
+CloudFormation template to create the function
+CFN template: [cruddur-lambda-schema-load-cfn.yml](./cruddur-lambda-schema-load-cfn.yml)
+
+## Lambda Function to update RDS
+
+Create a lambda function with python to update RDS
+Code location: [cruddur-post-confirmation.py](./aws/lambdas/cruddur-post-confirmation.py)
+
+Make sure the Lambda has the following configuration
+- python 3.8 engine
+- Connected to VPC and the assigned Security Group is allowed to access RDS
+- environment variable with the key: PROD_CONNECTION_URL and value of the Database Connection URI in RDS
+
+Use this lambda as a post-confirmation lambda trigger on the Cognito User Pool.
+
+Update the following code to allow insert user to the RDS and allow Crud
+- [app.py](./backend-flask/app.py)
+- [home_activities.py](./backend-flask/services/backend-flask/services/home_activities.py)
+- [create_activity.py](./backend-flask/services/home_activities.py)
+- [ActivityForm.js](./frontend-react-js/src/components/ActivityForm.js)
+- [HomeFeedPage.js](./frontend-react-js/src/pages/HomeFeedPage.js)
+
+## All-in-one Week 4 CFN stack
+
+CFN template: [cruddur-lambda-schema-load-cfn.yml](./cruddur-cfn-stack-cfn.yml)
+
+To create all-in-one stack using the CFN template, you will need:
+- A VPC (the default VPC is easier)
+- A VPC ID
+- 2 Subnet IDs
+- region
+- Database username & password
+
+The CFN template will create the following AWS resources:
+- New Security Group for Lambda
+- New Security Group for DB2 and inbound rules allowing Security Group for Lambda to access RDS via TCP 443
+- New DB Subnet Group
+- New IAM Role for Lambda with Manage Policy AWSLambdaVPCAccessExecutionRole
+- New Lambda Function for post-confirmation with VPC and Env Vars configuration
+- New Lambda Function for db schema load with VPC and Env Vars configuration
+- New Cognito User pool
+- New Cognito User pool client
+- Assign Lambda Function for post-confirmation to Cognito
+- Output relevant values
+
+Store VPC ID and Subnet IDs in variables
+```sh
+VpcId=$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true --query "Vpcs[0].VpcId" --output text --region <region>)
+SubnetIds=$(aws ec2 describe-subnets --filters Name=vpc-id,Values=${VpcId} --query="[Subnets[0].SubnetId,Subnets[1].SubnetId]" --region <region> --output=text | sed 's/\s\+/,/g; s/.*/"&"/')
+```
+
+Run `aws cloudformation create-stack` command using the $VpcId and SubnetIds variable
+```sh
+aws cloudformation create-stack \
+	--stack-name cruddur \
+	--region <region> \
+	--template-body file://cruddur-cfn-stack.yml \
+	--capabilities CAPABILITY_NAMED_IAM \
+	--parameters \
+	ParameterKey=VpcId,ParameterValue=$VpcId \
+	ParameterKey=SubnetIds,ParameterValue=$SubnetIds \
+	ParameterKey=AvailabilityZone,ParameterValue=<region><az> \
+	ParameterKey=DBMasterUsername,ParameterValue=cruddurroot \
+	ParameterKey=DBMasterPassword,ParameterValue=<dbpassword>
+```
+
+`aws lambda invoke --function-name cruddur-schema-load response.json --region <region>`

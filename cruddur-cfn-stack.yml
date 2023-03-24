@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 
-Description: Cruddur RDS Postgres CFN
+Description: Cruddur Week 4 CFN
 
 Metadata: 
   AWS::CloudFormation::Interface: 
@@ -222,7 +222,7 @@ Resources:
     Type: AWS::IAM::Role # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-role.html
     Properties:
       RoleName: !Ref LambdaRoleName
-      Description: Lambda execution role for cruddur-post-confirmation function
+      Description: Lambda execution role
       ManagedPolicyArns: [arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole]
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -369,8 +369,8 @@ Resources:
                   conn.commit() 
 
                   # Send the success response to CloudFormation
-                  response_data = {'message': 'Table created successfully'}
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+                  # response_data = {'message': 'Table created successfully'}
+                  # cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
 
                 except (Exception, psycopg2.DatabaseError) as error:
                   print(error)
@@ -379,8 +379,8 @@ Resources:
                   conn.rollback()
 
                   # Send the failure response to CloudFormation
-                  response_data = {'error': str(error)}
-                  cfnresponse.send(event, context, cfnresponse.FAILED, response_data)
+                  # response_data = {'error': str(error)}
+                  # cfnresponse.send(event, context, cfnresponse.FAILED, response_data)
 
                 finally:
                   if conn is not None:
@@ -541,19 +541,21 @@ Outputs:
       Name: !Sub "${AWS::StackName}-prod-connection-uri"
 
   LambdaPostConfirmFunctionArn:
-    Description: ARN of Lambda cruddur-schema-load function.
+    Description: ARN of Lambda cruddur-post-confirmation function.
     Value: !GetAtt LambdaPostConfirmFunction.Arn
     Export:
       Name: !Sub "${AWS::StackName}-${LambdaPostConfirmFunctionName}"
 
   LambdaSchemaLoadFunctionArn:
-    Description: ARN of Lambda cruddur-post-confirmation function
+    Description: ARN of Lambda cruddur-schema-load function
     Value: !GetAtt LambdaSchemaLoadFunction.Arn
     Export:
       Name: !Sub "${AWS::StackName}-${LambdaSchemaLoadFunctionName}"
   CLIInvokeLambdaSchemaLoadFunction:
     Description: aws cli to invoke lambda cruddur-schema-load function
     Value: !Sub "aws lambda invoke --function-name ${LambdaSchemaLoadFunctionName} response.json --region ${AWS::Region}"
+    Export:
+      Name: !Sub "${AWS::StackName}-aws-cli-db-schema-load"
 
   UserPoolID:
     Value: !Ref CognitoUserPool
