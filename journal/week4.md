@@ -403,4 +403,45 @@ aws cloudformation create-stack \
 	ParameterKey=DBMasterPassword,ParameterValue=<dbpassword>
 ```
 
-`aws lambda invoke --function-name cruddur-schema-load response.json --region <region>`
+After stack is ready, invoke the schema load function from UI or aws cli: `aws lambda invoke --function-name cruddur-schema-load response.json --region <region>`
+
+Start gitpod or local devcontainer
+Retrive IP address using `curl ifconfig.me`
+Update the stack SGCidrIP with the machine IP or manually update the Security Group
+
+
+Set env vars based on the cfn output ![cruddur-cfn-stack-output](../_docs/assets/cruddur-cfn-stack-output.png)
+
+```sh
+cd $THEIA_WORKSPACE_ROOT/backend-flask
+pip install -r requirements.txt
+
+cd $THEIA_WORKSPACE_ROOT/frontend-react-js
+npm install
+
+export AWS_ACCESS_KEY_ID="keyid"
+export AWS_SECRET_ACCESS_KEY="secretkey"
+export AWS_DEFAULT_REGION="ap-southeast-2"
+export COGNITO_USER_POOLS_ID="UserPoolClientID"
+export COGNITO_CLIENT_ID="AWS Cognito Client ID"
+
+gp env AWS_ACCESS_KEY_ID="keyid"
+gp env AWS_SECRET_ACCESS_KEY="secretkey"
+gp env AWS_DEFAULT_REGION="ap-southeast-2"
+gp env COGNITO_USER_POOLS_ID="UserPoolClientID"
+gp env COGNITO_CLIENT_ID="UserPoolID"
+```
+
+run docker compose up
+```sh
+cd $THEIA_WORKSPACE_ROOT
+docker compose -f "docker-compose.yml" up -d --build
+```
+
+once completed, delete stack from UI or aws cli `aws cloudformation delete-stack --stack-name my-stack
+
+```sh
+aws cloudformation delete-stack \
+	--stack-name cruddur \
+	--region <region>
+```
