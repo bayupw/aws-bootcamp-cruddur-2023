@@ -18,8 +18,13 @@ There are few sections in this journal
 ## Install Postgres Client
 
 Install postgres client https://www.psycopg.org/psycopg3/ locally to test database connectivity and query on the containers
+See the following diagram
+![Postgres Connection Diagram](../_docs/assets/postgres-connection-diagram.png)
+1) psql client to connect to db container will use connection URI > postgres:password@localhost
+2) backend-flask container to connect to db container will use containername (db) with connection URI > postgres:password@db.
+Note: Gitpod terminal cannot resolve container name (db), it will need to connect locally to the docker host (localhost)
 
-Add the env var `CONNECTION_URL` to the backend-flask application:
+Add the env var `CONNECTION_URL` to the backend-flask application to connect to postgres:
 
 ```yml
   backend-flask:
