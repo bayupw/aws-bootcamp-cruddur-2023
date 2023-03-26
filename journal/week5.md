@@ -17,12 +17,24 @@ make sure dynamodb-local container is defined in docker-compose
 
 add boto3 to requirements.txt
 
+```sh
+cd $THEIA_WORKSPACE_ROOT/backend-flask/
+pip install -r requirements.txt
+```
+
 create dynamodb scripts leveraging aws cli to do the following:
 - dynamodb schema load (schema-load.sh)
 - list tables (list-tables.sh)
 - drop table (drop-table.sh)
 
+Note: make sure line endings are in LF
+
 db.py
 query_value
 
 DynamoDB command reference: https://docs.aws.amazon.com/cli/latest/reference/dynamodb/index.html
+
+```sh
+cd $THEIA_WORKSPACE_ROOT/backend-flask/bin/ddb
+chmod -R u+x .
+```

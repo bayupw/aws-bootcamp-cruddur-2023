@@ -7,13 +7,14 @@ else
   ENDPOINT_URL="--endpoint-url=http://localhost:8000"
 fi
 
-echo "Listing tables ..."
+echo -e "Listing tables ...\r"
 
+echo -e "\ntable output:"
 aws dynamodb list-tables $ENDPOINT_URL \
   --query TableNames \
   --output table
 
+echo -e "\ntext output:"
 aws dynamodb list-tables $ENDPOINT_URL \
-  --query TableNames[0].ListTables \
-  --output table
-  
+  --query TableNames \
+  --output text
