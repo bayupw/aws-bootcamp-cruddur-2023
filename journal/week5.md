@@ -38,3 +38,32 @@ DynamoDB command reference: https://docs.aws.amazon.com/cli/latest/reference/dyn
 cd $THEIA_WORKSPACE_ROOT/backend-flask/bin/ddb
 chmod -R u+x .
 ```
+
+uuid_from_cognito_user_id
+
+create db scripts to update cognito user id
+update message_groups.py
+update app.py
+
+uuid_from_cognito_user_id.sql
+
+update HomeFeedPage.js
+
+remove
+
+// [TODO] Authenication
+import Cookies from 'js-cookie'
+
+
+update MessageGroupPage.js,MessageGroupsPage.js,MessageForm.js
+
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`
+        },
+
+move checkAuth function from HomeFeedPage.js to checkAuth.js
+
+update docker-compose
+AWS_ENDPOINT_URL: "http://dynamodb-local:8000"  # for local dynamodb
+
+create postgre table & seed, seed dynamodb-local

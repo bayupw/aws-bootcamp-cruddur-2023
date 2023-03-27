@@ -8,4 +8,4 @@ printf "${CYAN}== ${LABEL}${NO_COLOR}\n"
 # remove cruddur from connection URI
 NO_DB_CONNECTION_URL=$(sed 's/\/cruddur//g' <<<"$LOCAL_CONNECTION_URL")
 
-psql $NO_DB_CONNECTION_URL -c "drop database cruddur;"
+psql $NO_DB_CONNECTION_URL -c "drop database IF EXISTS cruddur;"

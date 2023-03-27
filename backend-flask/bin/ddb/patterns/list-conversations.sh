@@ -39,6 +39,7 @@ my_user_uuid = get_my_user_uuid()
 print(f"my-uuid: {my_user_uuid}")
 
 current_year = datetime.datetime.now().year
+
 # define the query parameters
 query_params = {
   'TableName': table_name,

@@ -10,3 +10,4 @@ printf "${CYAN}==== ${LABEL}${NO_COLOR}\n"
 ./db-create.sh
 ./db-schema-load.sh
 ./db-seed.sh
+# ./d-update-cognito-user-ids.sh
