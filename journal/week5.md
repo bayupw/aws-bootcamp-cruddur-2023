@@ -67,3 +67,8 @@ update docker-compose
 AWS_ENDPOINT_URL: "http://dynamodb-local:8000"  # for local dynamodb
 
 create postgre table & seed, seed dynamodb-local
+
+
+aws cognito-idp list-user-pools --max-results 1 --region <region> --output table
+
+aws cognito-idp list-users --user-pool-id <user-pool-id>
