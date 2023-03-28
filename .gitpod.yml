@@ -36,7 +36,7 @@ ports:
   - name: db
     port: 5432
     visibility: public
-  - name: xray-daemon
+  - name: dynamodb-local
     port: 8000
     visibility: public
   - name: xray-daemon

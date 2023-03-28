@@ -58,13 +58,15 @@ npm install
 
 export AWS_ACCESS_KEY_ID="keyid"
 export AWS_SECRET_ACCESS_KEY="secretkey"
-export AWS_DEFAULT_REGION="ap-southeast-2"
+export AWS_DEFAULT_REGION="region"
 export COGNITO_USER_POOLS_ID="UserPoolClientID"
 export COGNITO_CLIENT_ID="AWS Cognito Client ID"
+export CONNECTION_URL="postgresql://postgres:password@db:5432/cruddur"
+export LOCAL_CONNECTION_URL="postgresql://postgres:password@localhost:5432/cruddur"
 
 gp env AWS_ACCESS_KEY_ID="keyid"
 gp env AWS_SECRET_ACCESS_KEY="secretkey"
-gp env AWS_DEFAULT_REGION="ap-southeast-2"
+gp env AWS_DEFAULT_REGION="region"
 gp env COGNITO_USER_POOLS_ID="UserPoolClientID"
 gp env COGNITO_CLIENT_ID="UserPoolID"
 
@@ -427,15 +429,20 @@ npm install
 
 export AWS_ACCESS_KEY_ID="keyid"
 export AWS_SECRET_ACCESS_KEY="secretkey"
-export AWS_DEFAULT_REGION="ap-southeast-2"
+export AWS_DEFAULT_REGION="region"
 export COGNITO_USER_POOLS_ID="UserPoolClientID"
 export COGNITO_CLIENT_ID="AWS Cognito Client ID"
+export CONNECTION_URL="postgresql://postgres:password@db:5432/cruddur"
+export LOCAL_CONNECTION_URL="postgresql://postgres:password@localhost:5432/cruddur"
+export PROD_CONNECTION_URL="postgresql://cruddurroot:password@cruddur-db-instance.xyz.<region>.rds.amazonaws.com:5432/cruddur"
+
 
 gp env AWS_ACCESS_KEY_ID="keyid"
 gp env AWS_SECRET_ACCESS_KEY="secretkey"
-gp env AWS_DEFAULT_REGION="ap-southeast-2"
+gp env AWS_DEFAULT_REGION="region"
 gp env COGNITO_USER_POOLS_ID="UserPoolClientID"
 gp env COGNITO_CLIENT_ID="UserPoolID"
+gp env PROD_CONNECTION_URL="postgresql://cruddurroot:password@cruddur-db-instance.xyz.<region>.rds.amazonaws.com:5432/cruddur"
 ```
 
 run docker compose up
