@@ -369,7 +369,7 @@ Update the following code to allow insert user to the RDS and allow Crud
 
 ## All-in-one Week 4 CFN stack
 
-CFN template: [cruddur-lambda-schema-load-cfn.yml](../cruddur-cfn-stack-cfn.yml)
+CFN template: [cruddur-lambda-schema-load-cfn.yml](../cruddur-cfn-stack.yml)
 
 To create all-in-one stack using the CFN template, you will need:
 - A VPC (the default VPC is easier)
