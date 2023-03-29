@@ -58,13 +58,15 @@ npm install
 
 export AWS_ACCESS_KEY_ID="keyid"
 export AWS_SECRET_ACCESS_KEY="secretkey"
-export AWS_DEFAULT_REGION="ap-southeast-2"
+export AWS_DEFAULT_REGION="region"
 export COGNITO_USER_POOLS_ID="UserPoolClientID"
 export COGNITO_CLIENT_ID="AWS Cognito Client ID"
+export CONNECTION_URL="postgresql://postgres:password@db:5432/cruddur"
+export LOCAL_CONNECTION_URL="postgresql://postgres:password@localhost:5432/cruddur"
 
 gp env AWS_ACCESS_KEY_ID="keyid"
 gp env AWS_SECRET_ACCESS_KEY="secretkey"
-gp env AWS_DEFAULT_REGION="ap-southeast-2"
+gp env AWS_DEFAULT_REGION="region"
 gp env COGNITO_USER_POOLS_ID="UserPoolClientID"
 gp env COGNITO_CLIENT_ID="UserPoolID"
 
@@ -331,7 +333,7 @@ cd $THEIA_WORKSPACE_ROOT/backend-flask/bin
 #### Lambda Function for DB Schema Load 
 
 DB schema load can also be done via Lambda.
-Code location: [cruddur-schema-load.py](./aws/lambdas/cruddur-schema-load.py)
+Code location: [cruddur-schema-load.py](../aws/lambdas/cruddur-schema-load.py)
 
 Make sure the Lambda has the following configuration
 - python 3.8 engine
@@ -344,12 +346,12 @@ aws lambda invoke --function-name <lambda-function-name> response.json --region 
 ```
 
 CloudFormation template to create the function
-CFN template: [cruddur-lambda-schema-load-cfn.yml](./cruddur-lambda-schema-load-cfn.yml)
+CFN template: [cruddur-lambda-schema-load-cfn.yml](../cruddur-lambda-schema-load-cfn.yml)
 
 ## Lambda Function to update RDS
 
 Create a lambda function with python to update RDS
-Code location: [cruddur-post-confirmation.py](./aws/lambdas/cruddur-post-confirmation.py)
+Code location: [cruddur-post-confirmation.py](../aws/lambdas/cruddur-post-confirmation.py)
 
 Make sure the Lambda has the following configuration
 - python 3.8 engine
@@ -367,7 +369,7 @@ Update the following code to allow insert user to the RDS and allow Crud
 
 ## All-in-one Week 4 CFN stack
 
-CFN template: [cruddur-lambda-schema-load-cfn.yml](./cruddur-cfn-stack-cfn.yml)
+CFN template: [cruddur-lambda-schema-load-cfn.yml](../cruddur-cfn-stack.yml)
 
 To create all-in-one stack using the CFN template, you will need:
 - A VPC (the default VPC is easier)
@@ -427,15 +429,20 @@ npm install
 
 export AWS_ACCESS_KEY_ID="keyid"
 export AWS_SECRET_ACCESS_KEY="secretkey"
-export AWS_DEFAULT_REGION="ap-southeast-2"
+export AWS_DEFAULT_REGION="region"
 export COGNITO_USER_POOLS_ID="UserPoolClientID"
 export COGNITO_CLIENT_ID="AWS Cognito Client ID"
+export CONNECTION_URL="postgresql://postgres:password@db:5432/cruddur"
+export LOCAL_CONNECTION_URL="postgresql://postgres:password@localhost:5432/cruddur"
+export PROD_CONNECTION_URL="postgresql://cruddurroot:password@cruddur-db-instance.xyz.<region>.rds.amazonaws.com:5432/cruddur"
+
 
 gp env AWS_ACCESS_KEY_ID="keyid"
 gp env AWS_SECRET_ACCESS_KEY="secretkey"
-gp env AWS_DEFAULT_REGION="ap-southeast-2"
+gp env AWS_DEFAULT_REGION="region"
 gp env COGNITO_USER_POOLS_ID="UserPoolClientID"
 gp env COGNITO_CLIENT_ID="UserPoolID"
+gp env PROD_CONNECTION_URL="postgresql://cruddurroot:password@cruddur-db-instance.xyz.<region>.rds.amazonaws.com:5432/cruddur"
 ```
 
 run docker compose up
