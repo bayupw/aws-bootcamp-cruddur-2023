@@ -3,21 +3,17 @@
 import boto3
 import os
 import sys
-import uuid
 from datetime import datetime, timedelta, timezone
+import uuid
 
-current_path = os.path.dirname(os.path.abspath(__file__))               # find absolute path of current file
-parent_path = os.path.abspath(os.path.join(current_path, '..', '..'))   # find parent path (up 2 directories)
-sys.path.append(parent_path)                                            # append parent_path to path
-from lib.db import db                                                   # import lib/db.py
-
-now = datetime.now(timezone.utc).astimezone()
-message_group_uuid = "5ae290ed-55d1-47a0-bc6d-fe2bc2700399" # hardcoded
+current_path = os.path.dirname(os.path.abspath(__file__))
+parent_path = os.path.abspath(os.path.join(current_path, '..', '..'))
+sys.path.append(parent_path)
+from lib.db import db
 
 attrs = {
   'endpoint_url': 'http://localhost:8000'
 }
-
 # unset endpoint url for use with production database
 if len(sys.argv) == 2:
   if "prod" in sys.argv[1]:
@@ -50,8 +46,6 @@ def get_user_uuids():
   print('get_user_uuids')
   print(results)
   return results
-
-users = get_user_uuids()
 
 def create_message_group(client,message_group_uuid, my_user_uuid, last_message_at=None, message=None, other_user_uuid=None, other_user_display_name=None, other_user_handle=None):
   table_name = 'cruddur-messages'
@@ -89,6 +83,10 @@ def create_message(client,message_group_uuid, created_at, message, my_user_uuid,
   )
   # print the response
   print(response)
+
+message_group_uuid = "5ae290ed-55d1-47a0-bc6d-fe2bc2700399" 
+now = datetime.now(timezone.utc).astimezone()
+users = get_user_uuids()
 
 create_message_group(
   client=ddb,
@@ -220,44 +218,25 @@ Person 2: Definitely. I think his character is a great example of the show's abi
 """
 
 
-# lstrip() = delete leading hidden \n heredoc
-# rstrip() = delete trailing hidden \n heredoc
-# split() = split hidden char hidden \n
 lines = conversation.lstrip('\n').rstrip('\n').split('\n')
-for i in range(len(lines)):                                 # length lines = how many lines
-  if lines[i].startswith('Person 1: '):                     # if Person 1 > assign to my_user
+for i in range(len(lines)):
+  if lines[i].startswith('Person 1: '):
     key = 'my_user'
     message = lines[i].replace('Person 1: ', '')
-  elif lines[i].startswith('Person 2: '):                   # length lines = how many lines
-    key = 'other_user'                                      # if Person 1 > assign to my_user
+  elif lines[i].startswith('Person 2: '):
+    key = 'other_user'
     message = lines[i].replace('Person 2: ', '')
   else:
     print(lines[i])
     raise 'invalid line'
 
-created_at = (now + timedelta(minutes=i)).isoformat()
-
-create_message(
-  client=ddb,
-  message_group_uuid=message_group_uuid,
-  created_at=created_at,
-  message=message,
-  my_user_uuid=users[key]['uuid'],
-  my_user_display_name=users[key]['display_name'],
-  my_user_handle=users[key]['handle']
-) 
-
-# sample data structure
-# 
-# people = {
-#     'my_user': {
-#         uuid:
-#         display_name:
-#         handle:
-#     },
-#     'other_user': {
-#         uuid:
-#         display_name:
-#         handle:
-#     }
-# }
+  created_at = (now + timedelta(minutes=i)).isoformat()
+  create_message(
+    client=ddb,
+    message_group_uuid=message_group_uuid,
+    created_at=created_at,
+    message=message,
+    my_user_uuid=users[key]['uuid'],
+    my_user_display_name=users[key]['display_name'],
+    my_user_handle=users[key]['handle']
+  )

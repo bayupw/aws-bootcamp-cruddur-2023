@@ -77,3 +77,6 @@ aws cognito-idp list-users --user-pool-id <user-pool-id>
 
 list-users.sh
 update-cognito-user-ids.sh
+
+
+checkAuth.js
