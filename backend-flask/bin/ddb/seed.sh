@@ -12,6 +12,7 @@ sys.path.append(parent_path)                                            # append
 from lib.db import db                                                   # import lib/db.py
 
 now = datetime.now(timezone.utc).astimezone()
+message_group_uuid = "5ae290ed-55d1-47a0-bc6d-fe2bc2700399" # hardcoded
 
 attrs = {
   'endpoint_url': 'http://localhost:8000'
@@ -50,6 +51,8 @@ def get_user_uuids():
   print(results)
   return results
 
+users = get_user_uuids()
+
 def create_message_group(client,message_group_uuid, my_user_uuid, last_message_at=None, message=None, other_user_uuid=None, other_user_display_name=None, other_user_handle=None):
   table_name = 'cruddur-messages'
   record = {
@@ -86,9 +89,6 @@ def create_message(client,message_group_uuid, created_at, message, my_user_uuid,
   )
   # print the response
   print(response)
-
-message_group_uuid = "5ae290ed-55d1-47a0-bc6d-fe2bc2700399" # hardcoded
-users = get_user_uuids()
 
 create_message_group(
   client=ddb,
@@ -220,20 +220,32 @@ Person 2: Definitely. I think his character is a great example of the show's abi
 """
 
 
-# lstrip() = delete leading \n heredoc
-# rstrip() = delete trailing \n heredoc
-# split() = split hidden char \n
+# lstrip() = delete leading hidden \n heredoc
+# rstrip() = delete trailing hidden \n heredoc
+# split() = split hidden char hidden \n
 lines = conversation.lstrip('\n').rstrip('\n').split('\n')
-for i in range(len(lines)):
-  if lines[i].startswith('Person 1: '):
+for i in range(len(lines)):                                 # length lines = how many lines
+  if lines[i].startswith('Person 1: '):                     # if Person 1 > assign to my_user
     key = 'my_user'
     message = lines[i].replace('Person 1: ', '')
-  elif lines[i].startswith('Person 2: '):
-    key = 'other_user'
+  elif lines[i].startswith('Person 2: '):                   # length lines = how many lines
+    key = 'other_user'                                      # if Person 1 > assign to my_user
     message = lines[i].replace('Person 2: ', '')
   else:
     print(lines[i])
     raise 'invalid line'
+
+created_at = (now + timedelta(minutes=i)).isoformat()
+
+create_message(
+  client=ddb,
+  message_group_uuid=message_group_uuid,
+  created_at=created_at,
+  message=message,
+  my_user_uuid=users[key]['uuid'],
+  my_user_display_name=users[key]['display_name'],
+  my_user_handle=users[key]['handle']
+) 
 
 # sample data structure
 # 
@@ -249,15 +261,3 @@ for i in range(len(lines)):
 #         handle:
 #     }
 # }
-
-  created_at = (now + timedelta(minutes=i)).isoformat()
-
-  create_message(
-    client=ddb,
-    message_group_uuid=message_group_uuid,
-    created_at=created_at,
-    message=message,
-    my_user_uuid=users[key]['uuid'],
-    my_user_display_name=users[key]['display_name'],
-    my_user_handle=users[key]['handle']
-  ) 

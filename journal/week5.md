@@ -24,6 +24,7 @@ pip install -r requirements.txt
 
 create dynamodb scripts leveraging aws cli to do the following:
 - dynamodb schema load (schema-load.sh)
+- seed (seed.sh)
 - list tables (list-tables.sh)
 - drop table (drop-table.sh)
 
@@ -72,3 +73,7 @@ create postgre table & seed, seed dynamodb-local
 aws cognito-idp list-user-pools --max-results 1 --region <region> --output table
 
 aws cognito-idp list-users --user-pool-id <user-pool-id>
+
+
+list-users.sh
+update-cognito-user-ids.sh
