@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Cruddur AWS DynamoDB Table CFN
+
+Parameters:
+  TableName:
+    Type: String
+    Default: cruddur-messages
+    Description: Enter a string for the DynamoDB Table Name.
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Select an existing VPC
+  RouteTableId:
+    Type: CommaDelimitedList
+    Description: Enter one or more subnet id separated by comma.
+
+Resources:
+  DynamoDBEndpoint:
+    Type: AWS::EC2::VPCEndpoint # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-vpcendpoint.html
+    Properties:
+      VpcEndpointType: Gateway
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.dynamodb
+      VpcId: !Ref VpcId
+      RouteTableIds: !Ref RouteTableId
+      PolicyDocument: {
+        "Id": "Policy",
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "Statement",
+            "Action": "dynamodb:*",
+            "Effect": "Allow",
+            "Resource": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}",
+            "Principal": "*"
+          }
+        ]
+      }
+          
+  # DynamoDBWriteRole:
+  #   Type: AWS::IAM::Role
+  #   DependsOn: MyDynamoDBTable
+  #   Properties:
+  #     AssumeRolePolicyDocument:
+  #       Version: 2012-10-17
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: ec2.amazonaws.com
+  #           Action:
+  #             - sts:AssumeRole
+  #     Path: /
+  #     Policies:
+  #       -
+  #       - PolicyName: DynamoDB-role
+  #         PolicyDocument:
+  #           Version: 2012-10-17
+  #           Statement:
+  #             -
+  #               Effect: Allow
+  #               Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}
+  #               #Resource: !Join [ "", [ "arn:aws:dynamodb:", !Ref 'AWS::Region', ":", !Ref 'AWS::AccountId', ":", "table/", !Ref TableName ]]
+  #               Action:
+  #                 - dynamodb:PutItem
+  #                 - dynamodb:DescribeTable
+  #                 - dynamodb:CreateTable
+  #                 - dynamodb:UpdateTimeToLive
+
+# Outputs:
+#   DynamoDBTableName:
+#     Value: !Ref TableName
+#     Description: DynamoDB Table Name.

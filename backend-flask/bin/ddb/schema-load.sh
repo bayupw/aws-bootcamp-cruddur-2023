@@ -26,6 +26,10 @@ response = ddb.create_table(
       'AttributeName': 'sk',
       'AttributeType': 'S'
     },
+    {
+      'AttributeName': 'message_group_uuid',  # GSI
+      'AttributeType': 'S'
+    },
   ],
   KeySchema=[
     {
@@ -37,8 +41,23 @@ response = ddb.create_table(
       'KeyType': 'RANGE'
     },
   ],
-  #GlobalSecondaryIndexes=[
-  #],
+  GlobalSecondaryIndexes= [{
+    'IndexName':'message-group-sk-index',
+    'KeySchema':[{
+      'AttributeName': 'message_group_uuid',
+      'KeyType': 'HASH'
+    },{
+      'AttributeName': 'sk',
+      'KeyType': 'RANGE'
+    }],
+    'Projection': {
+      'ProjectionType': 'ALL'
+    },
+    'ProvisionedThroughput': {
+      'ReadCapacityUnits': 5,
+      'WriteCapacityUnits': 5
+    },
+  }],
   BillingMode='PROVISIONED',    # free tier is provisioned throughput
   ProvisionedThroughput={
       'ReadCapacityUnits': 5,   # required for provisioned throughput

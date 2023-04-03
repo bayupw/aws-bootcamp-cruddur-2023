@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Cruddur AWS DynamoDB Table CFN
+
+Parameters:
+  TableName:
+    Type: String
+    Default: cruddur-messages
+    Description: Enter a string for DynamoDB Table Name.
+
+Resources:
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table  # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-dynamodb-table.html
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+        - AttributeName: message_group_uuid   # GSI
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      TableName: !Ref TableName
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+      GlobalSecondaryIndexes:                   # GSI
+        - IndexName: message-group-sk-index     # GSI name
+          KeySchema:
+            - AttributeName: message_group_uuid # GSI Partition Key
+              KeyType: HASH
+            - AttributeName: sk                 # GSI Sort Key
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL                 # GSI should include all in the projection
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5   
+
+Outputs:
+  DynamoDBTableName:
+    Value: !Ref TableName
+    Description: DynamoDB Table Name.
+    Export:
+      Name: !Sub "${AWS::StackName}-${TableName}"
