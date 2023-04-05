@@ -3,15 +3,18 @@ import boto3
 import os
 from boto3.dynamodb.conditions import Key, Attr
 
+runtime_region = os.environ['AWS_REGION']
+print(runtime_region)
+
 dynamodb = boto3.resource(
- 'dynamodb',
- region=os.getenv('AWS_DEFAULT_REGION'),
- endpoint_url = f"http://dynamodb.{region}.amazonaws.com"
+'dynamodb',
+region_name = os.environ['AWS_REGION'],
+endpoint_url = "http://dynamodb." + runtime_region + ".amazonaws.com"
 )
 
 def lambda_handler(event, context):
   print('event-data',event)
-
+  
   eventName = event['Records'][0]['eventName']
   if (eventName == 'REMOVE'):
     print("skip REMOVE event")
@@ -23,8 +26,8 @@ def lambda_handler(event, context):
     message = event['Records'][0]['dynamodb']['NewImage']['message']['S']
     print("GRUP ===>",group_uuid,message)
     
-    table_name = 'cruddur-messages'
-    index_name = 'message-group-sk-index'
+    table_name = os.getenv('TABLE_NAME')
+    index_name = os.getenv('GSI_NAME')
     table = dynamodb.Table(table_name)
     data = table.query(
       IndexName=index_name,
