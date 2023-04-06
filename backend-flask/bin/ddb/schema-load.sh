@@ -4,12 +4,12 @@ import boto3
 import sys
 
 attrs = {
-  'endpoint_url': 'http://localhost:8000'
+  'endpoint_url': 'http://localhost:8000'   # dynamodb-local
 }
 
-if len(sys.argv) == 2:
-  if "prod" in sys.argv[1]:
-    attrs = {}
+if len(sys.argv) == 2:        # if there are 2 parameters
+  if "prod" in sys.argv[1]:   # if the 2nd argument = prod
+    attrs = {}                # clear up the attrs
 
 ddb = boto3.client('dynamodb',**attrs)
 
@@ -26,6 +26,10 @@ response = ddb.create_table(
       'AttributeName': 'sk',
       'AttributeType': 'S'
     },
+    {
+      'AttributeName': 'message_group_uuid',  # GSI
+      'AttributeType': 'S'
+    },
   ],
   KeySchema=[
     {
@@ -37,12 +41,27 @@ response = ddb.create_table(
       'KeyType': 'RANGE'
     },
   ],
-  #GlobalSecondaryIndexes=[
-  #],
-  BillingMode='PROVISIONED',
-  ProvisionedThroughput={
+  GlobalSecondaryIndexes= [{
+    'IndexName':'message-group-sk-index',
+    'KeySchema':[{
+      'AttributeName': 'message_group_uuid',
+      'KeyType': 'HASH'
+    },{
+      'AttributeName': 'sk',
+      'KeyType': 'RANGE'
+    }],
+    'Projection': {
+      'ProjectionType': 'ALL'
+    },
+    'ProvisionedThroughput': {
       'ReadCapacityUnits': 5,
       'WriteCapacityUnits': 5
+    },
+  }],
+  BillingMode='PROVISIONED',    # free tier is provisioned throughput
+  ProvisionedThroughput={
+      'ReadCapacityUnits': 5,   # required for provisioned throughput
+      'WriteCapacityUnits': 5   # required for provisioned throughput
   }
 )
 

@@ -18,3 +18,5 @@ echo -e "\ntext output:"
 aws dynamodb list-tables $ENDPOINT_URL \
   --query TableNames \
   --output text
+
+# https://docs.aws.amazon.com/cli/latest/reference/dynamodb/index.html
