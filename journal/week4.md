@@ -230,9 +230,9 @@ Create SQL related functions in a file [db.py](../backend-flask/lib/db.py) under
 The functions will use libraries from [psycopg](https://www.psycopg.org/psycopg3/docs/index.html)
 
 Create common SQL commands under `backend-flask/db/sql/activities`
-- [create.sql](../backend-flask/sql/activities/create.sql)
-- [home.sql](../backend-flask/sql/activities/home.sql)
-- [object.sql](../backend-flask/sql/activities/object.sql)
+- [create.sql](../backend-flask/db/sql/activities/create.sql)
+- [home.sql](../backend-flask/db/sql/activities/home.sql)
+- [object.sql](../backend-flask/db/sql/activities/object.sql)
 
 ## Create and Test RDS Instance
 
