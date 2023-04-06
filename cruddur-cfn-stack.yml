@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 
-Description: Cruddur Week 4 CFN
+Description: Cruddur CloudFormation Template
 
 Metadata: 
   AWS::CloudFormation::Interface: 
@@ -33,15 +33,23 @@ Metadata:
       - Label:
           default: Lambda Parameters
         Parameters:
-          - LambdaPostConfirmFunctionName
-          - LambdaSchemaLoadFunctionName
+          - PostConfirmFunctionName
+          - SchemaLoadFunctionName
           - Architectures
-          - LambdaRoleName
+          - LambdaVPCAccessExecRoleName
       - Label:
           default: Cognito Parameters
         Parameters:
           - CognitoUserPoolName
           - CognitoClientName
+      - Label:
+          default: DynamoDB Parameters
+        Parameters:
+          - DynamoDBTableName
+          - DynamoDBGSIName
+          - MessageStreamFunctionName
+          - LambdaDynamoDBRoleName
+          - RouteTableId
 
 Parameters:
   DBInstanceId:
@@ -68,6 +76,7 @@ Parameters:
     MinLength: '8'
     MaxLength: '41'
     Description: Enter a string for the Database Master Password.
+    Default: BadDbPassword
   DBInstanceClass:
     Type: String
     AllowedValues: [db.t3.micro,db.t4g.micro]
@@ -123,14 +132,14 @@ Parameters:
     Type: String
     Default: 1.1.1.1/32
 
-  LambdaPostConfirmFunctionName:
+  PostConfirmFunctionName:
     Type: String
     MinLength: '1'
     MaxLength: '64'
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9_-]*'
     Description: Lambda function name.
     Default: cruddur-post-confirmation
-  LambdaSchemaLoadFunctionName:
+  SchemaLoadFunctionName:
     Type: String
     MinLength: '1'
     MaxLength: '64'
@@ -142,7 +151,7 @@ Parameters:
     Description: arm64 or x86_64.
     AllowedValues: [arm64,x86_64]
     Default: x86_64
-  LambdaRoleName:
+  LambdaVPCAccessExecRoleName:
     Type: String
     MinLength: '1'
     MaxLength: '64'
@@ -164,6 +173,32 @@ Parameters:
     MaxLength: 63
     Default: cruddur-cognito-client
     AllowedPattern: '[\w\s+=,.@-]+'
+
+  DynamoDBTableName:
+    Type: String
+    Default: cruddur-messages
+    Description: Enter a string for the DynamoDB Table Name.
+  DynamoDBGSIName:
+    Type: String
+    Default: message-group-sk-index 
+    Description: Enter a string for the DynamoDB GSI Name.  
+  MessageStreamFunctionName:
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9_-]*'
+    Description: Lambda function name.
+    Default: cruddur-message-stream    
+  LambdaDynamoDBRoleName:
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[\w+=,.@-]+'
+    Description: New IAM role name for Lambda access to Dynamodb.
+    Default: cruddur-lambda-dynamodb-role
+  RouteTableId:
+    Type: CommaDelimitedList
+    Description: Enter one or more subnet id separated by comma.
 
 Conditions:
   CreateMultiAZ: !Equals [!Ref EnableMultiAZ, true]
@@ -218,10 +253,10 @@ Resources:
       PubliclyAccessible: !Ref EnablePublicAccess
       VPCSecurityGroups: [!GetAtt DBEC2SecurityGroup.GroupId]
 
-  LambdaRole:
+  LambdaVPCAccessExecRole:
     Type: AWS::IAM::Role # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-role.html
     Properties:
-      RoleName: !Ref LambdaRoleName
+      RoleName: !Ref LambdaVPCAccessExecRoleName
       Description: Lambda execution role
       ManagedPolicyArns: [arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole]
       AssumeRolePolicyDocument:
@@ -235,15 +270,15 @@ Resources:
   LambdaPostConfirmFunction:
     Type: AWS::Lambda::Function # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-lambda-function.html
     Properties:
-      FunctionName: !Ref LambdaPostConfirmFunctionName
+      FunctionName: !Ref PostConfirmFunctionName
       Architectures: [!Ref Architectures]
       Runtime: python3.8
       Handler: index.lambda_handler
       MemorySize: 128
       Timeout: 3
       TracingConfig: 
-        Mode: "PassThrough"
-      Role: !GetAtt LambdaRole.Arn
+        Mode: PassThrough
+      Role: !GetAtt LambdaVPCAccessExecRole.Arn
       Environment:
         Variables:
           PROD_CONNECTION_URL: !Join [ "", ["postgresql://", !Ref DBMasterUsername, ":", !Ref DBMasterPassword, "@", !GetAtt RDSInstance.Endpoint.Address, ":", !Ref DBPort, "/", !Ref DBName]] 
@@ -306,7 +341,7 @@ Resources:
   LambdaSchemaLoadFunction:
     Type: AWS::Lambda::Function # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-lambda-function.html
     Properties:
-      FunctionName: !Ref LambdaSchemaLoadFunctionName
+      FunctionName: !Ref SchemaLoadFunctionName
       Architectures: [!Ref Architectures]
       Runtime: python3.8
       Handler: index.lambda_handler
@@ -314,7 +349,7 @@ Resources:
       Timeout: 3
       TracingConfig:
         Mode: "PassThrough"
-      Role: !GetAtt LambdaRole.Arn
+      Role: !GetAtt LambdaVPCAccessExecRole.Arn
       Environment:
         Variables:
           PROD_CONNECTION_URL: !Join [ "", ["postgresql://", !Ref DBMasterUsername, ":", !Ref DBMasterPassword, "@", !GetAtt RDSInstance.Endpoint.Address, ":", !Ref DBPort, "/", !Ref DBName]] 
@@ -505,6 +540,174 @@ Resources:
       Principal: "cognito-idp.amazonaws.com"
       SourceArn: !Join [ "", [ "arn:aws:cognito-idp", ":", !Ref "AWS::Region", ":", !Ref "AWS::AccountId", ":", "userpool/", !Ref CognitoUserPool] ]
 
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table  # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-dynamodb-table.html
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+        - AttributeName: message_group_uuid   # GSI
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      TableName: !Ref DynamoDBTableName
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+      GlobalSecondaryIndexes:                   # GSI
+        - IndexName: !Ref DynamoDBGSIName     # GSI name
+          KeySchema:
+            - AttributeName: message_group_uuid # GSI Partition Key
+              KeyType: HASH
+            - AttributeName: sk                 # GSI Sort Key
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL                 # GSI should include all in the projection
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5   
+  DynamoDBEndpoint:
+    Type: AWS::EC2::VPCEndpoint # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-vpcendpoint.html
+    Properties:
+      VpcEndpointType: Gateway
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.dynamodb
+      VpcId: !Ref VpcId
+      RouteTableIds: !Ref RouteTableId
+      PolicyDocument:
+        Id: Policy
+        Version: "2012-10-17"
+        Statement:
+          - Sid: Statement
+            Action: dynamodb:*
+            Effect: Allow
+            Resource: "*"
+            Principal: "*"
+  DynamoDBIAMPolicy:
+      Type: AWS::IAM::Policy
+      Properties:
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                Resource:
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}/index/${DynamoDBGSIName}
+          Roles: 
+            - !Ref LambdaDynamoDBRole
+          PolicyName: cruddur-messaging-stream-dynamodb
+  LambdaDynamoDBRole:
+    Type: AWS::IAM::Role # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-role.html
+    Properties:
+      RoleName: !Ref LambdaDynamoDBRoleName
+      Description: Lambda DynamoDB role
+      ManagedPolicyArns: 
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaDynamoDBExecutionRole
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaInvocation-DynamoDB
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: [sts:AssumeRole]
+  MessageStreamFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Ref MessageStreamFunctionName
+      Architectures: [!Ref Architectures]
+      Runtime: python3.8
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Timeout: 3
+      TracingConfig: 
+        Mode: PassThrough
+      Role: !GetAtt LambdaDynamoDBRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref DynamoDBTableName
+          GSI_NAME: !Ref DynamoDBGSIName
+      VpcConfig:
+        SecurityGroupIds: [!GetAtt LambdaEC2SecurityGroup.GroupId]
+        SubnetIds: !Ref SubnetIds
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from boto3.dynamodb.conditions import Key, Attr
+
+          runtime_region = os.environ['AWS_REGION']
+          print(runtime_region)
+
+          dynamodb = boto3.resource(
+          'dynamodb',
+          region_name = os.environ['AWS_REGION'],
+          endpoint_url = "http://dynamodb." + runtime_region + ".amazonaws.com"
+          )
+
+          def lambda_handler(event, context):
+            print('event-data',event)
+            
+            eventName = event['Records'][0]['eventName']
+            if (eventName == 'REMOVE'):
+              print("skip REMOVE event")
+              return
+            pk = event['Records'][0]['dynamodb']['Keys']['pk']['S']
+            sk = event['Records'][0]['dynamodb']['Keys']['sk']['S']
+            if pk.startswith('MSG#'):
+              group_uuid = pk.replace("MSG#","")
+              message = event['Records'][0]['dynamodb']['NewImage']['message']['S']
+              print("GRUP ===>",group_uuid,message)
+              
+              table_name = os.getenv('TABLE_NAME')
+              index_name = os.getenv('GSI_NAME')
+              table = dynamodb.Table(table_name)
+              data = table.query(
+                IndexName=index_name,
+                KeyConditionExpression=Key('message_group_uuid').eq(group_uuid)
+              )
+              print("RESP ===>",data['Items'])
+              
+              # recreate the message group rows with new SK value
+              for i in data['Items']:
+                delete_item = table.delete_item(Key={'pk': i['pk'], 'sk': i['sk']})
+                print("DELETE ===>",delete_item)
+                
+                response = table.put_item(
+                  Item={
+                    'pk': i['pk'],
+                    'sk': sk,
+                    'message_group_uuid':i['message_group_uuid'],
+                    'message':message,
+                    'user_display_name': i['user_display_name'],
+                    'user_handle': i['user_handle'],
+                    'user_uuid': i['user_uuid']
+                  }
+                )
+                print("CREATE ===>",response)
+  DynamoDBEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 1
+      EventSourceArn: !GetAtt DynamoDBTable.StreamArn
+      FunctionName: !GetAtt MessageStreamFunction.Arn
+      Enabled: true
+      StartingPosition: LATEST
+
   # need to update python code to handle cfnresponse properly
   # InvokeLambdaSchemaLoad:
   #   Type: AWS::CloudFormation::CustomResource
@@ -544,16 +747,16 @@ Outputs:
     Description: ARN of Lambda cruddur-post-confirmation function.
     Value: !GetAtt LambdaPostConfirmFunction.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-${LambdaPostConfirmFunctionName}"
+      Name: !Sub "${AWS::StackName}-${PostConfirmFunctionName}"
 
   LambdaSchemaLoadFunctionArn:
     Description: ARN of Lambda cruddur-schema-load function
     Value: !GetAtt LambdaSchemaLoadFunction.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-${LambdaSchemaLoadFunctionName}"
+      Name: !Sub "${AWS::StackName}-${SchemaLoadFunctionName}"
   CLIInvokeLambdaSchemaLoadFunction:
     Description: aws cli to invoke lambda cruddur-schema-load function
-    Value: !Sub "aws lambda invoke --function-name ${LambdaSchemaLoadFunctionName} response.json --region ${AWS::Region}"
+    Value: !Sub "aws lambda invoke --function-name ${SchemaLoadFunctionName} response.json --region ${AWS::Region}"
     Export:
       Name: !Sub "${AWS::StackName}-aws-cli-db-schema-load"
 
@@ -567,3 +770,10 @@ Outputs:
     Description: REACT_APP_CLIENT_ID
     Export:
       Name: !Sub "${AWS::StackName}-cognito-client-id"
+
+  LambdaMessageStreamFunctionArn:
+    Description: ARN of Lambda message-stream function.
+    Value: !GetAtt MessageStreamFunction.Arn
+  DynamoDBStreamArn:
+    Description: ARN of Lambda message-stream function.
+    Value: !GetAtt DynamoDBTable.StreamArn
