@@ -362,8 +362,8 @@ Use this lambda as a post-confirmation lambda trigger on the Cognito User Pool.
 
 Update the following code to allow insert user to the RDS and allow Crud
 - [app.py](../backend-flask/app.py)
-- [home_activities.py](../backend-flask/services/backend-flask/services/home_activities.py)
-- [create_activity.py](../backend-flask/services/home_activities.py)
+- [home_activities.py](../backend-flask/services/home_activities.py)
+- [create_activity.py](../backend-flask/services/create_activity.py)
 - [ActivityForm.js](../frontend-react-js/src/components/ActivityForm.js)
 - [HomeFeedPage.js](../frontend-react-js/src/pages/HomeFeedPage.js)
 
