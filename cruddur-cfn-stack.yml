@@ -252,7 +252,8 @@ Resources:
       AvailabilityZone: !If [CreateMultiAZ, !Ref 'AWS::NoValue', !Ref AvailabilityZone]
       PubliclyAccessible: !Ref EnablePublicAccess
       VPCSecurityGroups: [!GetAtt DBEC2SecurityGroup.GroupId]
-
+    DeletionPolicy: Delete    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-deletionpolicy.html
+    
   LambdaVPCAccessExecRole:
     Type: AWS::IAM::Role # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-role.html
     Properties:

@@ -45,17 +45,18 @@ Parameters:
     Description: Enter a string for the Database Instance Name. Must begin with a letter. Subsequent characters can be letters, underscores, or digits (0-9).
     Default: cruddur
   DBMasterUsername:
-    NoEcho: 'true'
     Type: String
     MinLength: '1'
     MaxLength: '16'
     Description: Enter a string for the Database Master Username.
+    Default: cruddurroot
   DBMasterPassword:
     NoEcho: 'true'
     Type: String
     MinLength: '8'
     MaxLength: '41'
     Description: Enter a string for the Database Master Password.
+    Default: BadDbPassword
   DBInstanceClass:
     Type: String
     AllowedValues: [db.t3.micro,db.t4g.micro]
@@ -152,6 +153,7 @@ Resources:
       AvailabilityZone: !If [CreateMultiAZ, !Ref 'AWS::NoValue', !Ref AvailabilityZone]
       PubliclyAccessible: !Ref EnablePublicAccess
       VPCSecurityGroups: [!GetAtt DBEC2SecurityGroup.GroupId]
+    DeletionPolicy: Delete    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-deletionpolicy.html
 
 Outputs:
   DatabaseSecurityGroupId:
