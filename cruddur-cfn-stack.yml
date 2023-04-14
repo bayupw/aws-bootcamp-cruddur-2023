@@ -616,7 +616,7 @@ Resources:
           - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
           - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
           - arn:aws:iam::aws:policy/service-role/AWSLambdaDynamoDBExecutionRole
-          - arn:aws:iam::aws:policy/service-role/AWSLambdaInvocation-DynamoDB
+          - arn:aws:iam::aws:policy/AWSLambdaInvocation-DynamoDB
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
